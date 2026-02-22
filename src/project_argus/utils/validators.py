@@ -31,7 +31,7 @@ class URLValidator(BaseModel):
             pass
 
         # Handle missing scheme
-        if not url.startswith(("http://", "https://", "ftp://")):
+        if not url.startswith(("http://", "https://")):
             url = "http://" + url
 
         # Parse and validate
@@ -40,8 +40,8 @@ class URLValidator(BaseModel):
         except Exception as e:
             raise ValueError(f"Unable to parse URL: {str(e)}") from e
 
-        if not parsed.scheme or parsed.scheme not in ["http", "https", "ftp"]:
-            raise ValueError("URL must use http, https, or ftp scheme")
+        if not parsed.scheme or parsed.scheme not in ["http", "https"]:
+            raise ValueError("URL must use http or https scheme")
 
         if not parsed.netloc:
             raise ValueError("URL must contain a valid domain/host")
@@ -58,16 +58,27 @@ class URLValidator(BaseModel):
             if not cls._is_valid_hostname(hostname):
                 raise ValueError("Invalid hostname format") from None
 
+        # check if hostname is localhost or private IP
+        if parsed.hostname and (
+            parsed.hostname.lower() == "localhost"
+            or parsed.hostname.startswith("127.")
+            or parsed.hostname.startswith("192.168.")
+        ):
+            raise ValueError(
+                "URL cannot point to localhost or private IP address"
+            )
+
         # Check for overly long URLs (potential DoS)
         if len(url) > 2048:
             raise ValueError("URL exceeds maximum length (2048 characters)")
 
-        # Check for null bytes (security risk)
-        if "\x00" in url:
-            raise ValueError("URL contains null bytes")
-
         # Check for SSRF attempts (localhost, private IPs)
-        if cls._is_suspicious_host(hostname):
+        if (
+            "localhost" in url
+            or url.startswith("http://127.")
+            or url.startswith("http://192.168.")
+            or cls._is_suspicious_host(parsed.hostname or parsed.netloc)
+        ):
             raise ValueError("URL targets suspicious or internal resource")
 
         return url
@@ -92,7 +103,9 @@ class URLValidator(BaseModel):
         for label in labels:
             if not label or len(label) > 63:
                 return False
-            if not re.match(r"^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$", label, re.IGNORECASE):
+            if not re.match(
+                r"^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$", label, re.IGNORECASE
+            ):
                 return False
 
         # Validate TLD
@@ -123,7 +136,12 @@ class URLValidator(BaseModel):
         # Check if it's a private IP
         try:
             ip = ipaddress.ip_address(hostname)
-            if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved:
+            if (
+                ip.is_private
+                or ip.is_loopback
+                or ip.is_link_local
+                or ip.is_reserved
+            ):
                 return True
         except ValueError:
             pass
@@ -170,7 +188,9 @@ class DomainValidator(BaseModel):
         # Check if it's actually an IP address
         try:
             ipaddress.ip_address(domain)
-            raise ValueError(f"Expected domain name, got IP address: {domain}") from None
+            raise ValueError(
+                f"Expected domain name, got IP address: {domain}"
+            ) from None
         except ValueError as e:
             if "Expected domain" in str(e):
                 raise
@@ -184,7 +204,9 @@ class DomainValidator(BaseModel):
 
         # Check length
         if len(domain) > 253:
-            raise ValueError("Domain name exceeds maximum length (253 characters)")
+            raise ValueError(
+                "Domain name exceeds maximum length (253 characters)"
+            )
 
         if len(domain) < 3:
             raise ValueError("Domain name too short")
@@ -204,53 +226,52 @@ class DomainValidator(BaseModel):
                 raise ValueError("Domain contains empty label")
 
             if len(label) > 63:
-                raise ValueError(f"Domain label exceeds maximum length: {label}")
+                raise ValueError(
+                    "Domain label exceeds maximum length (63 characters)"
+                )
 
             if label.startswith("-") or label.endswith("-"):
-                raise ValueError(f"Domain label cannot start or end with hyphen: {label}")
+                raise ValueError("Domain label cannot start or end with hyphen")
 
-            if not re.match(r"^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$", label, re.IGNORECASE):
+            if not re.match(
+                r"^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$", label, re.IGNORECASE
+            ):
                 raise ValueError(f"Invalid characters in domain label: {label}")
 
         # Validate TLD
         tld = labels[-1]
         if len(tld) < 2:
-            raise ValueError("TLD must be at least 2 characters")
+            raise ValueError("Invalid TLD format")
 
         if not re.match(r"^[a-z]{2,}$", tld, re.IGNORECASE):
-            raise ValueError(f"Invalid TLD format: {tld}")
+            raise ValueError("Invalid TLD format")
 
-        # Check for suspicious/internal domains
+        # Check for suspicious/internal TLDs
         if cls._is_suspicious_domain(domain):
-            raise ValueError("Domain appears to be internal or suspicious")
+            raise ValueError("Domain uses internal or suspicious TLD")
 
         return domain
 
     @staticmethod
     def _is_suspicious_domain(domain: str) -> bool:
-        """Check for internal/suspicious domains"""
-        suspicious = [
+        """Check for internal/suspicious domain patterns"""
+        suspicious_tlds = [
+            "local",
             "localhost",
-            ".local",
-            ".internal",
-            ".corp",
-            ".home",
-            ".lan",
-            ".test",
-            ".example",
-            ".invalid",
+            "internal",
+            "corp",
+            "lan",
+            "test",
+            "example",
+            "invalid",
         ]
 
-        domain_lower = domain.lower()
-        for pattern in suspicious:
-            if domain_lower == pattern.lstrip(".") or domain_lower.endswith(pattern):
-                return True
-
-        return False
+        tld = domain.split(".")[-1].lower()
+        return tld in suspicious_tlds or domain.lower() in ["localhost"]
 
 
 class IPValidator(BaseModel):
-    """Validate IP address format (IPv4 and IPv6) with security checks"""
+    """Validate IP address format with security checks"""
 
     ip: str
 
@@ -267,85 +288,54 @@ class IPValidator(BaseModel):
         if "\x00" in ip_str:
             raise ValueError("IP address contains null bytes")
 
-        # Validate IP address format
+        # Parse IP address
         try:
             ip = ipaddress.ip_address(ip_str)
         except ValueError as e:
             raise ValueError(f"Invalid IP address format: {str(e)}") from e
 
         # Security checks
-        if ip.is_loopback:
-            raise ValueError("Loopback addresses are not allowed")
-
         if ip.is_private:
             raise ValueError("Private IP addresses are not allowed")
 
+        if ip.is_loopback:
+            raise ValueError("Loopback IP addresses are not allowed")
+
         if ip.is_link_local:
-            raise ValueError("Link-local addresses are not allowed")
+            raise ValueError("Link-local IP addresses are not allowed")
+
+        if ip.is_multicast:
+            raise ValueError("Multicast IP addresses are not allowed")
+
+        if ip.is_unspecified:
+            raise ValueError("Unspecified IP addresses are not allowed")
 
         if ip.is_reserved:
             raise ValueError("Reserved IP addresses are not allowed")
 
-        if ip.is_multicast:
-            raise ValueError("Multicast addresses are not allowed")
-
-        if ip.is_unspecified:
-            raise ValueError("Unspecified addresses are not allowed")
-
-        # IPv4 specific checks
-        if isinstance(ip, ipaddress.IPv4Address):
-            # Check for 0.0.0.0
-            if str(ip) == "0.0.0.0":
-                raise ValueError("0.0.0.0 is not allowed")
-
-            # Check for broadcast
-            if ip.is_global and str(ip).endswith(".255"):
-                raise ValueError("Broadcast addresses are not allowed")
-
-        # IPv6 specific checks
-        if isinstance(ip, ipaddress.IPv6Address):
-            # Check for IPv4-mapped IPv6 addresses
-            if ip.ipv4_mapped:
-                raise ValueError("IPv4-mapped IPv6 addresses are not allowed")
+        # Check for IPv4-mapped IPv6
+        if isinstance(ip, ipaddress.IPv6Address) and ip.ipv4_mapped:
+            raise ValueError("IPv4-mapped IPv6 addresses are not allowed")
 
         return str(ip)
 
 
-# FastAPI dependency functions
-def validate_url(
-    url: Annotated[str, Query(description="URL to check", min_length=1, max_length=2048)],
-) -> str:
-    """FastAPI dependency for URL validation"""
-    try:
-        validator = URLValidator(url=url)
-        return validator.url
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Invalid URL: {str(e)}") from e
+# Type aliases for FastAPI endpoints
+ValidatedURL = Annotated[str, Query(..., description="URL to validate")]
+ValidatedDomain = Annotated[str, Query(..., description="Domain to validate")]
+ValidatedIP = Annotated[str, Query(..., description="IP address to validate")]
 
 
-def validate_domain(
-    domain: Annotated[
-        str,
-        Query(description="Domain name to check", min_length=3, max_length=253),
-    ],
-) -> str:
-    """FastAPI dependency for domain validation"""
-    try:
-        validator = DomainValidator(domain=domain)
-        return validator.domain
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Invalid domain: {str(e)}") from e
+def validate_url(url: str) -> str:
+    """Validate and sanitize URL"""
+    return URLValidator(url=url).url
 
 
-def validate_ip(
-    ip: Annotated[
-        str,
-        Query(description="IP address to check", min_length=7, max_length=45),
-    ],
-) -> str:
-    """FastAPI dependency for IP validation"""
-    try:
-        validator = IPValidator(ip=ip)
-        return validator.ip
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Invalid IP address: {str(e)}") from e
+def validate_domain(domain: str) -> str:
+    """Validate and sanitize domain"""
+    return DomainValidator(domain=domain).domain
+
+
+def validate_ip(ip: str) -> str:
+    """Validate and sanitize IP address"""
+    return IPValidator(ip=ip).ip

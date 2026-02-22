@@ -30,14 +30,9 @@ def mypy(session):
 
 @nox.session(python=PYTHON_VERSIONS)
 def tests(session):
-    """Run tests with pytest"""
-    session.install("-e", ".[dev]")
-    session.run(
-        "pytest",
-        "-v",
-        "--tb=short",
-        *session.posargs,
-    )
+    """Run unit tests"""
+    session.install(".[dev]")
+    session.run("pytest", "tests/unit", *session.posargs)
 
 
 @nox.session(python=PYTHON_VERSIONS[0])
@@ -113,3 +108,28 @@ def dev(session):
     session.run("pre-commit", "install")
     print("\n✅ Development environment ready!")
     print("Run 'nox' to execute all checks")
+
+
+@nox.session
+def integration(session):
+    """Run integration tests"""
+    session.install(".[dev]")
+    session.run(
+        "pytest", "tests/integration", "-m", "integration", *session.posargs
+    )
+
+
+@nox.session(python=PYTHON_VERSIONS[0])
+def functional(session):
+    """Run functional/E2E tests"""
+    session.install(".[dev]")
+    session.run(
+        "pytest", "tests/functional", "-m", "functional", *session.posargs
+    )
+
+
+@nox.session(python=PYTHON_VERSIONS[0])
+def test_all(session):
+    """Run all test types (unit, integration, functional)"""
+    session.install(".[dev]")
+    session.run("pytest", "tests/", *session.posargs)

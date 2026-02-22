@@ -76,7 +76,9 @@ nox
 # Run specific sessions
 nox -s lint          # Lint with ruff
 nox -s mypy          # Type check with mypy
-nox -s tests         # Run tests
+nox -s tests         # Run unit tests
+nox -s integration   # Run integration tests
+nox -s functional    # Run functional/E2E tests
 nox -s coverage      # Run tests with coverage
 nox -s typeguard     # Runtime type checking
 nox -s pre-commit    # Run pre-commit hooks
@@ -121,11 +123,23 @@ uv run uvicorn src.project_argus.main:app --host 0.0.0.0 --port 8000 --workers 4
 
 ## Testing
 
+### Test Structure
+
+- **Unit Tests**: Located in `tests/unit/`, test isolated components.
+- **Integration Tests**: Located in `tests/integration/`, test multiple components working together.
+- **Functional Tests**: Located in `tests/functional/`, test API endpoints end-to-end.
+
 ### Using Nox
 
 ```bash
 # Run all tests
 nox -s tests
+
+# Run integration tests
+nox -s integration
+
+# Run functional tests
+nox -s functional
 
 # Run tests with coverage
 nox -s coverage
@@ -268,6 +282,9 @@ project-argus/
 │   ├── utils/               # Utilities (validators, etc.)
 │   └── main.py              # FastAPI app
 ├── tests/                   # Test suite
+│   ├── unit/                # Unit tests
+│   ├── integration/         # Integration tests
+│   └── functional/          # Functional/E2E tests
 ├── noxfile.py              # Nox configuration
 ├── pyproject.toml          # Project metadata
 └── .pre-commit-config.yaml # Pre-commit hooks
