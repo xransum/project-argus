@@ -6,10 +6,13 @@ from fastapi.testclient import TestClient
 
 @pytest.fixture
 def client():
-    """Create test client"""
+    """Create test client using context manager so the lifespan and event loop
+    remain active for the full duration of each test, avoiding aiosqlite
+    background-thread races on loop shutdown."""
     from project_argus.main import app
 
-    return TestClient(app)
+    with TestClient(app) as c:
+        yield c
 
 
 @pytest.fixture
