@@ -1,40 +1,44 @@
 # Project Argus
 
-A comprehensive security investigation API for analyzing URLs, domains, and IP addresses. Built with FastAPI and designed for threat intelligence gathering and security research.
+A bulk intelligence-gathering API for analyzing URLs, domains, and IP addresses. Built with FastAPI (async), backed by a SQLite job queue, and served with a jQuery UI dark-theme dashboard.
 
 ## Features
 
 ### URL Analysis
-- **Status Check**: Verify URL accessibility and response times
-- **Headers Inspection**: Extract and analyze HTTP headers
+- **HTTP Status Check**: Verify reachability, response time, and full redirect chain
+- **Redirect Chain Tracking**: Follows HTTP 3xx redirects, detects loops and cap limits, and identifies client-side redirects (`<meta http-equiv="refresh">` and `window.location` JS patterns)
+- **Headers Inspection**: Fetch full HTTP response headers
 
 ### Domain Intelligence
-- **Domain Information**: WHOIS data, registrar, creation/expiration dates
-- **SSL/TLS Analysis**: Certificate validation, expiry monitoring
-- **DNS Records**: Query A, AAAA, MX, TXT, CNAME, NS records
-- **WHOIS Lookup**: Detailed registration information
-- **Geolocation**: IP geolocation of domain
-- **Reputation Checking**: Domain reputation scoring
-- **Blacklist Status**: Check against known blacklists
-- **SSL Certificate Details**: Full certificate information and chain
-- **Subdomain Discovery**: Enumerate subdomains
-- **Hosting Information**: Identify hosting provider and infrastructure
+- **Domain Info**: Registrar, creation/expiration dates
+- **SSL Check**: Certificate validity and expiry
+- **DNS Records**: A, AAAA, MX, TXT, CNAME, NS
+- **WHOIS Lookup**: Raw registration data
+- **GeoIP**: Geographic location of the domain's server
+- **Reputation**: Threat-intelligence reputation score
+- **Blacklist Check**: Known blacklist status
+- **SSL Certificate Details**: Full certificate chain
+- **Subdomain Enumeration**: Known subdomains
+- **Hosting & ASN Info**: Hosting provider and autonomous system
 
 ### IP Address Analysis
-- **IP Information**: Hostname, ASN, organization, ISP details
-- **Reverse DNS**: PTR record lookups
-- **Geolocation**: Geographic location data
-- **Reputation Checking**: IP reputation scoring
-- **Blacklist Status**: DNSBL and threat feed checks
-- **WHOIS Lookup**: Network registration information
+- **IP Info**: Hostname, ASN, organization, ISP
+- **Reverse DNS**: PTR record lookup
+- **GeoIP**: Geographic location
+- **Reputation**: Threat-intelligence reputation score
+- **Blacklist Check**: DNSBL and threat feed status
+- **WHOIS Lookup**: Network registration data
+
+### Async Job System
+All bulk endpoints enqueue a job and return immediately. Clients poll for status and paginated results.
 
 ## Installation
 
 ### Prerequisites
 
 - Python 3.8+
+- Node.js + npm (for frontend vendor assets)
 - [uv](https://github.com/astral-sh/uv) package manager
-- [nox](https://nox.thea.codes/) for automation
 
 ### Install uv
 
@@ -46,206 +50,98 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 powershell -c "irm https://astral.sh/uv/install.ps1 | iex"
 ```
 
-### Clone and Install
+### Clone and build
 
 ```bash
-# Clone the repository
 git clone https://github.com/yourusername/project-argus.git
 cd project-argus
 
-# Install dependencies
-uv sync --all-extras
+# Install Python deps + build frontend vendor assets
+./scripts/build.sh
 ```
 
-## Development Setup
-
-### Using Nox (Recommended)
-
-Nox automates testing, linting, type checking, and more:
-
-```bash
-# Install nox
-uv tool install nox
-
-# Set up development environment (installs pre-commit hooks)
-nox -s dev
-
-# Run all quality checks
-nox
-
-# Run specific sessions
-nox -s lint          # Lint with ruff
-nox -s mypy          # Type check with mypy
-nox -s tests         # Run unit tests
-nox -s integration   # Run integration tests
-nox -s functional    # Run functional/E2E tests
-nox -s coverage      # Run tests with coverage
-nox -s typeguard     # Runtime type checking
-nox -s pre-commit    # Run pre-commit hooks
-
-# Run tests on all Python versions
-nox -s tests
-
-# List all available sessions
-nox --list
-```
-
-### Manual Setup
-
-```bash
-# Install dev dependencies
-uv sync --group dev
-
-# Install pre-commit hooks
-uv run pre-commit install
-```
+`scripts/build.sh` runs `npm install` and copies jQuery and jQuery UI (dark-hive theme) into `src/project_argus/static/vendor/`.
 
 ## Running the API
 
-### Development Server
+### Development (auto-reload)
 
 ```bash
-# Using uv
-uv run uvicorn src.project_argus.main:app --reload --host 0.0.0.0 --port 8000
+./scripts/dev.sh
 ```
 
-The API will be available at:
-- **API Root**: http://localhost:8000
-- **Interactive Docs**: http://localhost:8000/docs
-- **ReDoc**: http://localhost:8000/redoc
-
-### Production Server
+### Production
 
 ```bash
-# Using uv with production settings
-uv run uvicorn src.project_argus.main:app --host 0.0.0.0 --port 8000 --workers 4
+./scripts/start.sh
 ```
 
-## Testing
-
-### Test Structure
-
-- **Unit Tests**: Located in `tests/unit/`, test isolated components.
-- **Integration Tests**: Located in `tests/integration/`, test multiple components working together.
-- **Functional Tests**: Located in `tests/functional/`, test API endpoints end-to-end.
-
-### Using Nox
+### Manual
 
 ```bash
-# Run all tests
-nox -s tests
-
-# Run integration tests
-nox -s integration
-
-# Run functional tests
-nox -s functional
-
-# Run tests with coverage
-nox -s coverage
-
-# Run tests with runtime type checking
-nox -s typeguard
-
-# Run tests on specific Python version
-nox -s tests-3.11
+uv run uvicorn src.project_argus.main:app --host 0.0.0.0 --port 8000
 ```
 
-### Using pytest directly
+The app will be available at:
 
-```bash
-# Run all tests
-uv run pytest
-
-# Run with coverage
-uv run pytest --cov=src/project_argus --cov-report=html
-
-# Run specific test file
-uv run pytest tests/test_url_endpoints.py
-
-# Run specific test
-uv run pytest tests/test_url_endpoints.py::test_url_status_endpoint
-
-# Verbose output
-uv run pytest -v
-
-# Stop on first failure
-uv run pytest -x
-```
-
-## Code Quality
-
-### Linting and Formatting
-
-```bash
-# Using nox
-nox -s lint
-
-# Using ruff directly
-uv run ruff check src/ tests/ --fix
-uv run ruff format src/ tests/
-```
-
-### Type Checking
-
-```bash
-# Using nox
-nox -s mypy
-
-# Using mypy directly
-uv run mypy src/project_argus
-```
-
-### Pre-commit Hooks
-
-```bash
-# Run all pre-commit hooks
-nox -s pre-commit
-
-# Or directly
-uv run pre-commit run --all-files
-```
+| URL | Description |
+|-----|-------------|
+| `http://localhost:8000/` | Dashboard UI |
+| `http://localhost:8000/docs` | Swagger / interactive docs |
+| `http://localhost:8000/redoc` | ReDoc |
+| `http://localhost:8000/api` | JSON endpoint discovery |
 
 ## API Endpoints
 
-### Root Endpoints
+All bulk endpoints accept **POST** with a JSON body. Responses are job references — poll `/jobs/{job_id}/status` and `/jobs/{job_id}/results` for output.
+
+### URL
 
 ```
-GET /                  # API information and endpoint listing
-GET /health           # Health check endpoint
+POST /api/url/status       { "urls": ["https://example.com", ...] }
+POST /api/url/headers      { "urls": ["https://example.com", ...] }
 ```
 
-### URL Endpoints
+### Domain
 
 ```
-GET /api/url/status?url=<url>       # Check URL status
-GET /api/url/headers?url=<url>      # Fetch URL headers
+POST /api/domain/info              { "domains": ["example.com", ...] }
+POST /api/domain/ssl               { "domains": [...] }
+POST /api/domain/dns               { "domains": [...] }
+POST /api/domain/whois             { "domains": [...] }
+POST /api/domain/geoip             { "domains": [...] }
+POST /api/domain/reputation        { "domains": [...] }
+POST /api/domain/blacklist         { "domains": [...] }
+POST /api/domain/ssl-certificate   { "domains": [...] }
+POST /api/domain/subdomains        { "domains": [...] }
+POST /api/domain/hosting           { "domains": [...] }
 ```
 
-### Domain Endpoints
+### IP
 
 ```
-GET /api/domain/info?domain=<domain>
-GET /api/domain/ssl?domain=<domain>
-GET /api/domain/dns?domain=<domain>&record_type=A
-GET /api/domain/whois?domain=<domain>
-GET /api/domain/geoip?domain=<domain>
-GET /api/domain/reputation?domain=<domain>
-GET /api/domain/blacklist?domain=<domain>
-GET /api/domain/ssl-certificate?domain=<domain>
-GET /api/domain/subdomains?domain=<domain>
-GET /api/domain/hosting?domain=<domain>
+POST /api/ip/info         { "ips": ["1.1.1.1", ...] }
+POST /api/ip/dns          { "ips": [...] }
+POST /api/ip/geoip        { "ips": [...] }
+POST /api/ip/reputation   { "ips": [...] }
+POST /api/ip/blacklist    { "ips": [...] }
+POST /api/ip/whois        { "ips": [...] }
 ```
 
-### IP Endpoints
+### Jobs
 
 ```
-GET /api/ip/info?ip=<ip>
-GET /api/ip/dns?ip=<ip>
-GET /api/ip/geoip?ip=<ip>
-GET /api/ip/reputation?ip=<ip>
-GET /api/ip/blacklist?ip=<ip>
-GET /api/ip/whois?ip=<ip>
+GET /jobs/{job_id}/status
+GET /jobs/{job_id}/results
+GET /jobs/{job_id}/results?nextToken={token}   # paginated
+```
+
+### Utility
+
+```
+GET /         # Dashboard UI
+GET /api      # JSON endpoint discovery
+GET /health   # Health check
 ```
 
 ## Usage Examples
@@ -253,52 +149,134 @@ GET /api/ip/whois?ip=<ip>
 ### cURL
 
 ```bash
-curl "http://localhost:8000/api/url/status?url=https://example.com"
-curl "http://localhost:8000/api/domain/whois?domain=example.com"
-curl "http://localhost:8000/api/ip/reputation?ip=8.8.8.8"
+# Submit a bulk URL status job
+curl -s -X POST http://localhost:8000/api/url/status \
+  -H "Content-Type: application/json" \
+  -d '{"urls": ["https://example.com", "https://google.com"]}'
+
+# Poll for results (replace <job_id>)
+curl -s http://localhost:8000/jobs/<job_id>/status
+curl -s http://localhost:8000/jobs/<job_id>/results
 ```
 
 ### Python
 
 ```python
+import asyncio
 import httpx
 
-async with httpx.AsyncClient() as client:
-    response = await client.get(
-        "http://localhost:8000/api/url/status",
-        params={"url": "https://example.com"}
-    )
-    print(response.json())
+async def main():
+    async with httpx.AsyncClient() as client:
+        # Submit job
+        r = await client.post(
+            "http://localhost:8000/api/url/status",
+            json={"urls": ["https://example.com"]},
+        )
+        job_id = r.json()["job_id"]
+
+        # Poll until done
+        while True:
+            status = await client.get(f"http://localhost:8000/jobs/{job_id}/status")
+            if status.json()["status"] in ("completed", "failed"):
+                break
+            await asyncio.sleep(1)
+
+        results = await client.get(f"http://localhost:8000/jobs/{job_id}/results")
+        print(results.json())
+
+asyncio.run(main())
+```
+
+## URL Status Response
+
+`/api/url/status` results include full redirect chain details:
+
+```json
+{
+  "url": "http://example.com",
+  "final_url": "https://example.com/landing",
+  "status_code": 200,
+  "is_reachable": true,
+  "response_time_ms": 143.5,
+  "redirect_count": 2,
+  "redirect_loop": false,
+  "redirect_limit_reached": false,
+  "redirect_chain": [
+    { "url": "http://example.com", "status_code": 301, "location": "https://example.com", "redirect_type": "http" },
+    { "url": "https://example.com", "status_code": 200, "location": null, "redirect_type": "meta-refresh" }
+  ]
+}
+```
+
+`redirect_type` values: `"http"` (3xx), `"meta-refresh"` (`<meta http-equiv="refresh">`), `"js-location"` (`window.location` / `location.href`).
+
+## Testing
+
+```bash
+# Run all tests
+./scripts/test.sh
+
+# Or directly
+uv run pytest
+
+# Specific file
+uv run pytest tests/unit/test_url_service.py -v
+```
+
+### Test structure
+
+```
+tests/
+├── unit/
+│   ├── test_url_service.py     # redirect chain, loop/limit detection
+│   ├── test_domain_service.py
+│   └── utils/
+│       └── test_validators.py
+└── functional/
+    ├── test_url_endpoints.py
+    ├── test_domain_endpoints.py
+    └── test_ip_endpoints.py
 ```
 
 ## Project Structure
 
 ```
 project-argus/
+├── package.json                          # npm deps (jQuery, jQuery UI)
+├── scripts/
+│   ├── build.sh                          # npm install + vendor copy
+│   ├── dev.sh                            # build + uvicorn --reload
+│   ├── start.sh                          # build + uvicorn prod
+│   └── test.sh                           # pytest runner
 ├── src/project_argus/
-│   ├── api/              # API endpoints
-│   ├── models/              # Pydantic models
-│   ├── services/            # Business logic
-│   ├── utils/               # Utilities (validators, etc.)
-│   └── main.py              # FastAPI app
-├── tests/                   # Test suite
-│   ├── unit/                # Unit tests
-│   ├── integration/         # Integration tests
-│   └── functional/          # Functional/E2E tests
-├── noxfile.py              # Nox configuration
-├── pyproject.toml          # Project metadata
-└── .pre-commit-config.yaml # Pre-commit hooks
+│   ├── api/
+│   │   ├── url.py                        # POST /api/url/*
+│   │   ├── domain.py                     # POST /api/domain/*
+│   │   ├── ip.py                         # POST /api/ip/*
+│   │   └── jobs.py                       # GET /jobs/*
+│   ├── models/
+│   │   ├── url_models.py                 # URLStatusResponse, RedirectHop
+│   │   └── job_models.py                 # JobCreatedResponse, JobStatusResponse
+│   ├── services/
+│   │   ├── url_service.py                # redirect chain + client-side detection
+│   │   ├── domain_service.py
+│   │   ├── ip_service.py
+│   │   └── job_service.py                # async job queue + HANDLERS dispatch
+│   ├── utils/
+│   │   ├── http.py                       # USER_AGENT_LIST, DEFAULT_REQUEST_HEADERS, extract_client_redirect()
+│   │   └── validators.py
+│   ├── static/
+│   │   └── js/app.js                     # dashboard JS (dropdown, auto-poll, syntax highlight)
+│   ├── templates/
+│   │   ├── _head.html                    # CSS design tokens + component styles
+│   │   ├── _scripts.html                 # script tags
+│   │   └── index.html                    # jQuery UI tabs dashboard
+│   ├── db.py                             # SQLite init + helpers
+│   └── main.py                           # FastAPI app, _ENDPOINTS registry, lifespan
+├── tests/
+└── pyproject.toml
 ```
-
-## Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Run `nox -s dev` to set up development environment
-4. Make your changes
-5. Run `nox` to ensure all checks pass
-6. Submit a pull request
 
 ## License
 
-MIT License - See LICENSE file for details
+MIT License — see LICENSE file for details.
