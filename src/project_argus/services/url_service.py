@@ -7,6 +7,7 @@ from urllib.parse import urljoin, urlparse
 import httpx
 
 from ..models.url_models import RedirectHop, URLHeadersResponse, URLStatusResponse
+from ..utils.http import DEFAULT_REQUEST_HEADERS, extract_client_redirect
 
 # Maximum number of redirects to follow before giving up.
 MAX_REDIRECTS = 10
@@ -47,6 +48,7 @@ class URLService:
             async with httpx.AsyncClient(
                 timeout=self.timeout,
                 follow_redirects=False,
+                headers=DEFAULT_REQUEST_HEADERS,
             ) as client:
                 while True:
                     # --- loop guard ---
@@ -80,13 +82,26 @@ class URLService:
                     )
 
                     if response.status_code in REDIRECT_CODES and location:
+                        chain[-1].redirect_type = "http"
                         current_url = _resolve_location(current_url, location)
                         # continue following
                     else:
-                        # Non-redirect (or redirect with no Location) — we're done
-                        final_url = current_url
-                        final_status = response.status_code
-                        break
+                        # Non-3xx — check body for client-side redirects,
+                        # but only bother parsing HTML/plain-text responses.
+                        content_type = response.headers.get("content-type", "")
+                        is_html = "html" in content_type or "plain" in content_type
+                        client_url, client_type = (
+                            extract_client_redirect(response.text) if is_html else (None, None)
+                        )
+                        if client_url and client_url not in seen_urls:
+                            chain[-1].redirect_type = client_type
+                            current_url = _resolve_location(current_url, client_url)
+                            # continue following the client-side hop
+                        else:
+                            # Truly done
+                            final_url = current_url
+                            final_status = response.status_code
+                            break
 
             response_time = (time.time() - start_time) * 1000
 
@@ -130,7 +145,9 @@ class URLService:
 
     async def get_headers(self, url: str) -> URLHeadersResponse:
         """Fetch the headers of a URL"""
-        async with httpx.AsyncClient(timeout=self.timeout, follow_redirects=True) as client:
+        async with httpx.AsyncClient(
+            timeout=self.timeout, follow_redirects=True, headers=DEFAULT_REQUEST_HEADERS
+        ) as client:
             response = await client.head(url)
             return URLHeadersResponse(
                 url=url,

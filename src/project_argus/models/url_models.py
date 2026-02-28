@@ -11,6 +11,8 @@ class RedirectHop(BaseModel):
     url: str
     status_code: int
     location: Optional[str] = None
+    redirect_type: Optional[str] = None
+    """How the redirect was triggered: 'http' (3xx), 'meta-refresh', or 'js-location'."""
 
 
 class URLStatusResponse(BaseModel):
