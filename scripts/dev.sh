@@ -10,7 +10,7 @@ bash "$ROOT/scripts/build.sh"
 
 echo "==> Starting dev server (hot-reload)..."
 cd "$ROOT"
-.venv/bin/uvicorn project_argus.main:app \
+uv run uvicorn project_argus.main:app \
     --host 0.0.0.0 \
     --port 8000 \
     --reload \

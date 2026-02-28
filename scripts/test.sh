@@ -7,4 +7,4 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
 echo "==> Running tests..."
-.venv/bin/pytest tests/ "$@"
+uv run pytest tests/ "$@"

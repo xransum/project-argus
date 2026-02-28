@@ -7,6 +7,10 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 STATIC="$ROOT/src/project_argus/static"
 VENDOR="$STATIC/vendor"
 
+echo "==> Installing Python dependencies..."
+cd "$ROOT"
+uv sync
+
 echo "==> Installing npm dependencies..."
 cd "$ROOT"
 npm install
