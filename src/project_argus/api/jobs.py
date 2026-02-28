@@ -55,7 +55,7 @@ async def get_job_results(
     try:
         after_id = int(nextToken) if nextToken else 0
     except ValueError:
-        raise HTTPException(status_code=400, detail="Invalid nextToken value")
+        raise HTTPException(status_code=400, detail="Invalid nextToken value") from None
 
     async with get_db() as conn:
         job = await get_job(conn, job_id)

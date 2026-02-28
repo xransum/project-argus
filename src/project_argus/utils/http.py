@@ -1,7 +1,7 @@
 """Shared HTTP utilities for outbound requests."""
 
-import re
 import random
+import re
 from datetime import datetime
 from typing import Optional, Tuple
 
@@ -18,14 +18,12 @@ USER_AGENT_LIST = [
         "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_5) AppleWebKit/605.1.15 (KHTML,"
         " like Gecko) Version/13.1.1 Safari/605.1.15"
     ),
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:77.0) Gecko/%s Firefox/77.0"
-    % NOW.strftime("%Y%m%d"),
+    f"Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:77.0) Gecko/{NOW.strftime('%Y%m%d')} Firefox/77.0",
     (
         "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_5) AppleWebKit/537.36 (KHTML,"
         " like Gecko) Chrome/83.0.4103.97 Safari/537.36"
     ),
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:77.0) Gecko/%s Firefox/77.0"
-    % NOW.strftime("%Y%m%d"),
+    f"Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:77.0) Gecko/{NOW.strftime('%Y%m%d')} Firefox/77.0",
     (
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like"
         " Gecko) Chrome/83.0.4103.97 Safari/537.36"
@@ -67,7 +65,7 @@ def _extract_meta_refresh(soup: BeautifulSoup) -> Optional[str]:
     tag = soup.find("meta", attrs={"http-equiv": re.compile(r"^refresh$", re.I)})
     if tag is None:
         return None
-    content = tag.get("content", "")
+    content = str(tag.get("content", "") or "")
     parts = re.split(r"url=", content, maxsplit=1, flags=re.IGNORECASE)
     if len(parts) < 2:
         return None
