@@ -54,10 +54,10 @@ app.add_middleware(
 
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
-app.include_router(url.router, prefix="/api/url", tags=["URL"])
-app.include_router(domain.router, prefix="/api/domain", tags=["Domain"])
-app.include_router(ip.router, prefix="/api/ip", tags=["IP"])
-app.include_router(jobs.router, prefix="/jobs", tags=["Jobs"])
+app.include_router(url.router, prefix="/api/url")
+app.include_router(domain.router, prefix="/api/domain")
+app.include_router(ip.router, prefix="/api/ip")
+app.include_router(jobs.router, prefix="/jobs")
 
 
 # ---------------------------------------------------------------------------

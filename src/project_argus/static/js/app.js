@@ -139,7 +139,7 @@
     // Auto-poll
     // -----------------------------------------------------------------------
 
-    var POLL_INTERVAL = 4; // seconds
+    var POLL_INTERVAL = 1; // seconds
 
     function startAutoPoll($panel, jobId) {
         var remaining = POLL_INTERVAL;
