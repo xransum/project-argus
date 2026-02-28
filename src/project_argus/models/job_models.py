@@ -1,6 +1,6 @@
 """Pydantic models for job tracking."""
 
-from typing import Any, Dict, List, Literal, Optional
+from typing import Any, List, Literal, Optional
 
 from pydantic import BaseModel, Field
 

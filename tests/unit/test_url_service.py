@@ -6,7 +6,6 @@ import pytest
 
 from project_argus.services.url_service import MAX_REDIRECTS, URLService
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------

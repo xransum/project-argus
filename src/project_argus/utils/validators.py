@@ -5,7 +5,7 @@ import re
 from urllib.parse import unquote, urlparse
 
 import idna
-from fastapi import HTTPException, Query
+from fastapi import Query
 from pydantic import BaseModel, field_validator
 from typing_extensions import Annotated
 
