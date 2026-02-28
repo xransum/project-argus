@@ -1,0 +1,354 @@
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Project Argus - API Dashboard</title>
+
+<!-- Vendor -->
+<link rel="stylesheet" href="/static/vendor/css/jquery-ui.min.css">
+<script src="/static/vendor/js/jquery.min.js"></script>
+<script src="/static/vendor/js/jquery-ui.min.js"></script>
+
+<style>
+    /* ----------------------------------------------------------------
+       Design tokens
+    ---------------------------------------------------------------- */
+    :root {
+        --bg-primary:   #1a1a2e;
+        --bg-secondary: #16213e;
+        --bg-tertiary:  #0f3460;
+        --bg-code:      #0a0a15;
+        --accent:       #00d9ff;
+        --accent-hover: #00b8d4;
+        --danger:       #ff6b6b;
+        --success:      #4ade80;
+        --warning:      #fbbf24;
+        --text-primary: #eeeeee;
+        --text-muted:   #888888;
+        --border:       #1e3a5f;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        background: var(--bg-primary);
+        color: var(--text-primary);
+        min-height: 100vh;
+        padding: 28px 20px 60px;
+        line-height: 1.5;
+    }
+
+    .container { max-width: 760px; margin: 0 auto; }
+
+    /* ----------------------------------------------------------------
+       Header
+    ---------------------------------------------------------------- */
+    header { margin-bottom: 36px; }
+    header h1 {
+        color: var(--accent);
+        font-size: 1.9em;
+        letter-spacing: -0.5px;
+    }
+    header .subtitle {
+        color: var(--text-muted);
+        margin-top: 6px;
+        font-size: 0.97em;
+    }
+    header .links {
+        margin-top: 14px;
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+    }
+    header .links a {
+        color: var(--text-muted);
+        text-decoration: none;
+        font-size: 0.82em;
+        border: 1px solid var(--border);
+        padding: 4px 12px;
+        border-radius: 20px;
+        transition: color 0.15s, border-color 0.15s;
+    }
+    header .links a:hover {
+        color: var(--accent);
+        border-color: var(--accent);
+    }
+
+    /* ----------------------------------------------------------------
+       jQuery UI tabs — dark theme overrides
+    ---------------------------------------------------------------- */
+    #api-tabs {
+        background: transparent;
+        border: none;
+        padding: 0;
+    }
+
+    #api-tabs .ui-tabs-nav {
+        background: var(--bg-secondary);
+        border: 1px solid var(--border);
+        border-bottom: none;
+        border-radius: 10px 10px 0 0;
+        padding: 10px 14px 0;
+        display: flex;
+        gap: 4px;
+    }
+    #api-tabs .ui-tabs-nav li {
+        background: transparent;
+        border: 1px solid transparent;
+        border-radius: 6px 6px 0 0;
+        margin: 0;
+        top: 0;
+        list-style: none;
+    }
+    #api-tabs .ui-tabs-nav li a {
+        color: var(--text-muted);
+        font-size: 0.9em;
+        font-weight: 600;
+        padding: 9px 22px;
+        text-decoration: none;
+        letter-spacing: 0.2px;
+        display: block;
+    }
+    #api-tabs .ui-tabs-nav li:hover {
+        background: var(--bg-tertiary);
+        border-color: var(--border);
+    }
+    #api-tabs .ui-tabs-nav li:hover a { color: var(--text-primary); }
+
+    #api-tabs .ui-tabs-nav li.ui-tabs-active {
+        background: var(--bg-primary);
+        border-color: var(--border);
+        border-bottom-color: var(--bg-primary);
+        margin-bottom: -1px;
+    }
+    #api-tabs .ui-tabs-nav li.ui-tabs-active a { color: var(--accent); }
+
+    #api-tabs .ui-tabs-panel {
+        background: var(--bg-primary);
+        border: 1px solid var(--border);
+        border-radius: 0 0 10px 10px;
+        padding: 28px 28px 32px;
+    }
+
+    /* ----------------------------------------------------------------
+       Query panel — the single form per tab
+    ---------------------------------------------------------------- */
+    .query-panel {
+        display: flex;
+        flex-direction: column;
+        gap: 18px;
+    }
+
+    .form-row {
+        display: flex;
+        flex-direction: column;
+        gap: 7px;
+    }
+
+    .field-label {
+        font-size: 0.78em;
+        font-weight: 700;
+        color: var(--text-muted);
+        text-transform: uppercase;
+        letter-spacing: 0.6px;
+    }
+    .field-label .required { color: var(--danger); margin-left: 2px; }
+
+    /* Select / dropdown */
+    .select-wrap {
+        position: relative;
+    }
+    .select-wrap::after {
+        content: "▾";
+        position: absolute;
+        right: 14px;
+        top: 50%;
+        transform: translateY(-50%);
+        color: var(--text-muted);
+        pointer-events: none;
+        font-size: 0.85em;
+    }
+    .action-select {
+        width: 100%;
+        appearance: none;
+        -webkit-appearance: none;
+        background: var(--bg-secondary);
+        border: 1px solid var(--border);
+        color: var(--text-primary);
+        padding: 10px 36px 10px 14px;
+        border-radius: 6px;
+        font-size: 0.92em;
+        cursor: pointer;
+        transition: border-color 0.15s, box-shadow 0.15s;
+    }
+    .action-select:focus {
+        outline: none;
+        border-color: var(--accent);
+        box-shadow: 0 0 0 3px rgba(0, 217, 255, 0.1);
+    }
+
+    .action-desc {
+        font-size: 0.84em;
+        color: var(--text-muted);
+        min-height: 1.2em;
+        line-height: 1.5;
+    }
+
+    /* Textarea */
+    .query-input {
+        background: var(--bg-secondary);
+        border: 1px solid var(--border);
+        color: var(--text-primary);
+        padding: 10px 14px;
+        border-radius: 6px;
+        font-size: 0.9em;
+        font-family: monospace;
+        resize: vertical;
+        line-height: 1.7;
+        transition: border-color 0.15s, box-shadow 0.15s;
+        width: 100%;
+    }
+    .query-input::placeholder { color: var(--text-muted); opacity: 0.6; }
+    .query-input:focus {
+        outline: none;
+        border-color: var(--accent);
+        box-shadow: 0 0 0 3px rgba(0, 217, 255, 0.1);
+    }
+
+    .form-hint {
+        font-size: 0.76em;
+        color: var(--text-muted);
+    }
+
+    /* Run button + path */
+    .form-actions {
+        flex-direction: row;
+        align-items: center;
+        gap: 14px;
+        flex-wrap: wrap;
+    }
+    .btn-run {
+        background: var(--accent);
+        color: var(--bg-primary);
+        border: none;
+        padding: 10px 30px;
+        border-radius: 6px;
+        cursor: pointer;
+        font-weight: 700;
+        font-size: 0.92em;
+        transition: background 0.15s, transform 0.1s;
+        white-space: nowrap;
+    }
+    .btn-run:hover    { background: var(--accent-hover); }
+    .btn-run:active   { transform: scale(0.97); }
+    .btn-run:disabled { opacity: 0.45; cursor: not-allowed; transform: none; }
+
+    .action-path {
+        font-family: monospace;
+        font-size: 0.78em;
+        color: var(--border);
+        user-select: all;
+    }
+
+    /* ----------------------------------------------------------------
+       Result panel
+    ---------------------------------------------------------------- */
+    .result-panel {
+        margin-top: 20px;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        overflow: hidden;
+        background: rgba(0,0,0,0.15);
+    }
+
+    .result-meta {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 10px 16px;
+        border-bottom: 1px solid var(--border);
+        font-size: 0.82em;
+        background: var(--bg-secondary);
+    }
+
+    .status-badge {
+        padding: 3px 10px;
+        border-radius: 20px;
+        font-weight: 700;
+        font-size: 0.85em;
+        letter-spacing: 0.3px;
+    }
+    .status-badge.ok   { background: rgba(74,222,128,0.15);  color: var(--success); border: 1px solid rgba(74,222,128,0.3); }
+    .status-badge.err  { background: rgba(255,107,107,0.15); color: var(--danger);  border: 1px solid rgba(255,107,107,0.3); }
+    .status-badge.warn { background: rgba(251,191,36,0.15);  color: var(--warning); border: 1px solid rgba(251,191,36,0.3); }
+
+    .response-time { color: var(--text-muted); }
+
+    .btn-clear {
+        margin-left: auto;
+        background: none;
+        border: none;
+        color: var(--text-muted);
+        cursor: pointer;
+        font-size: 1em;
+        line-height: 1;
+        padding: 2px 4px;
+        border-radius: 3px;
+        transition: color 0.15s;
+    }
+    .btn-clear:hover { color: var(--danger); }
+
+    /* Job banner — shown while polling */
+    .job-banner {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        flex-wrap: wrap;
+        padding: 14px 16px;
+        border-bottom: 1px solid var(--border);
+        font-size: 0.85em;
+        background: rgba(0, 217, 255, 0.04);
+    }
+    .job-banner .job-label  { color: var(--text-muted); }
+    .job-banner .job-id     { font-family: monospace; color: var(--accent); font-size: 0.95em; }
+    .job-banner .job-state  { font-weight: 600; }
+    .job-banner .job-state.pending   { color: var(--warning); }
+    .job-banner .job-state.running   { color: var(--accent); }
+    .job-banner .job-state.completed { color: var(--success); }
+    .job-banner .job-state.failed    { color: var(--danger); }
+    .job-banner .poll-countdown { color: var(--text-muted); font-size: 0.9em; margin-left: auto; }
+
+    /* JSON output */
+    .response-body {
+        padding: 14px 16px;
+        font-family: monospace;
+        font-size: 0.84em;
+        max-height: 420px;
+        overflow: auto;
+        white-space: pre-wrap;
+        word-break: break-all;
+        line-height: 1.7;
+        background: var(--bg-code);
+    }
+
+    /* JSON syntax colours */
+    .json-key    { color: #7dd3fc; }
+    .json-string { color: #86efac; }
+    .json-number { color: #fbbf24; }
+    .json-bool   { color: #c084fc; }
+    .json-null   { color: #666; }
+
+    /* ----------------------------------------------------------------
+       Spinner
+    ---------------------------------------------------------------- */
+    .spinner {
+        display: inline-block;
+        width: 13px; height: 13px;
+        border: 2px solid var(--border);
+        border-top-color: var(--accent);
+        border-radius: 50%;
+        animation: spin 0.7s linear infinite;
+        vertical-align: middle;
+        flex-shrink: 0;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+</style>

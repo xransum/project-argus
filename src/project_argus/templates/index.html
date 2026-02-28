@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    {% include "_head.html" %}
+</head>
+<body>
+    <div class="container">
+
+        <header>
+            <h1>Project Argus</h1>
+            <p class="subtitle">Bulk intelligence-gathering for URLs, domains, and IP addresses.</p>
+            <div class="links">
+                <a href="/docs">Swagger Docs</a>
+                <a href="/redoc">ReDoc</a>
+                <a href="/api">API Index</a>
+                <a href="/health">Health</a>
+            </div>
+        </header>
+
+        {# Build tab list: [(version, category, ep_map), ...] #}
+        {% set tabs = [] %}
+        {% for version, categories in endpoints.items() %}
+            {% for category, ep_map in categories.items() %}
+                {% set _ = tabs.append((version, category, ep_map)) %}
+            {% endfor %}
+        {% endfor %}
+
+        <div id="api-tabs">
+
+            <!-- Tab nav -->
+            <ul>
+            {% for version, category, ep_map in tabs %}
+                <li><a href="#tab-{{ category | lower }}">{{ category }}</a></li>
+            {% endfor %}
+            </ul>
+
+            <!-- Tab panels -->
+            {% for version, category, ep_map in tabs %}
+            <div id="tab-{{ category | lower }}">
+
+                {# Embed endpoint metadata as a JS-accessible data blob on the panel #}
+                <script type="application/json" class="ep-data">
+                {
+                    {% for name, meta in ep_map.items() %}
+                    {{ name | tojson }}: {
+                        "path":        {{ meta.path | tojson }},
+                        "label":       {{ meta.label | tojson }},
+                        "desc":        {{ meta.desc | tojson }},
+                        "param":       {{ meta.params[0].name | tojson }},
+                        "placeholder": {{ meta.params[0].placeholder | tojson }}
+                    }{% if not loop.last %},{% endif %}
+                    {% endfor %}
+                }
+                </script>
+
+                <div class="query-panel">
+
+                    <!-- Action selector -->
+                    <div class="form-row">
+                        <label class="field-label" for="action-{{ category | lower }}">Action</label>
+                        <div class="select-wrap">
+                            <select id="action-{{ category | lower }}" class="action-select">
+                                {% for name, meta in ep_map.items() %}
+                                <option value="{{ name }}">{{ meta.label }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <p class="action-desc"></p>
+                    </div>
+
+                    <!-- Input textarea -->
+                    <div class="form-row">
+                        <label class="field-label" for="input-{{ category | lower }}">
+                            Input <span class="required">*</span>
+                        </label>
+                        <textarea
+                            id="input-{{ category | lower }}"
+                            class="query-input"
+                            rows="4"
+                            placeholder=""
+                            spellcheck="false"
+                        ></textarea>
+                        <span class="form-hint">One per line, or separate with commas</span>
+                    </div>
+
+                    <!-- Run button -->
+                    <div class="form-row form-actions">
+                        <button class="btn-run" type="button">Run</button>
+                        <span class="action-path"></span>
+                    </div>
+
+                </div>{# /query-panel #}
+
+                <!-- Job status + results -->
+                <div class="result-panel" style="display:none;">
+
+                    <div class="result-meta">
+                        <span class="status-badge"></span>
+                        <span class="response-time"></span>
+                        <button class="btn-clear" title="Dismiss">&#x2715;</button>
+                    </div>
+
+                    <!-- Shows while job is running -->
+                    <div class="job-banner" style="display:none;">
+                        <span class="spinner"></span>
+                        <span class="job-label">Job queued</span>
+                        <span class="job-id"></span>
+                        <span class="job-state">pending</span>
+                        <span class="poll-countdown"></span>
+                    </div>
+
+                    <!-- Final JSON output -->
+                    <div class="response-body" style="display:none;"></div>
+
+                </div>{# /result-panel #}
+
+            </div>
+            {% endfor %}
+
+        </div>{# /api-tabs #}
+
+    </div>{# /container #}
+
+    {% include "_scripts.html" %}
+</body>
+</html>
