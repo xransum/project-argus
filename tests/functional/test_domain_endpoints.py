@@ -10,7 +10,7 @@ class TestDomainEndpoints:
 
     def test_domain_info_endpoint(self, client: TestClient, sample_domain: str) -> None:
         """Test domain info endpoint"""
-        response = client.get(f"/api/v1/domain/info?domain={sample_domain}")
+        response = client.get(f"/api/domain/info?domain={sample_domain}")
         assert response.status_code == 200
         data = response.json()
         assert "domain" in data
@@ -18,7 +18,7 @@ class TestDomainEndpoints:
 
     def test_domain_ssl_endpoint(self, client: TestClient, sample_domain: str) -> None:
         """Test domain SSL endpoint"""
-        response = client.get(f"/api/v1/domain/ssl?domain={sample_domain}")
+        response = client.get(f"/api/domain/ssl?domain={sample_domain}")
         assert response.status_code == 200
         data = response.json()
         assert "has_ssl" in data
@@ -28,7 +28,7 @@ class TestDomainEndpoints:
 
     def test_domain_dns_endpoint(self, client: TestClient, sample_domain: str) -> None:
         """Test domain DNS endpoint"""
-        response = client.get(f"/api/v1/domain/dns?domain={sample_domain}")
+        response = client.get(f"/api/domain/dns?domain={sample_domain}")
         assert response.status_code == 200
         data = response.json()
         assert "domain" in data
@@ -38,21 +38,21 @@ class TestDomainEndpoints:
 
     def test_domain_dns_endpoint_with_type(self, client: TestClient, sample_domain: str) -> None:
         """Test domain DNS endpoint with specific record type"""
-        response = client.get(f"/api/v1/domain/dns?domain={sample_domain}&record_type=MX")
+        response = client.get(f"/api/domain/dns?domain={sample_domain}&record_type=MX")
         assert response.status_code == 200
         data = response.json()
         assert data["record_type"] == "MX"
 
     def test_domain_whois_endpoint(self, client: TestClient, sample_domain: str) -> None:
         """Test domain WHOIS endpoint"""
-        response = client.get(f"/api/v1/domain/whois?domain={sample_domain}")
+        response = client.get(f"/api/domain/whois?domain={sample_domain}")
         assert response.status_code == 200
         data = response.json()
         assert "domain" in data
 
     def test_domain_geoip_endpoint(self, client: TestClient, sample_domain: str) -> None:
         """Test domain GeoIP endpoint"""
-        response = client.get(f"/api/v1/domain/geoip?domain={sample_domain}")
+        response = client.get(f"/api/domain/geoip?domain={sample_domain}")
         assert response.status_code == 200
         data = response.json()
         assert "domain" in data
@@ -60,7 +60,7 @@ class TestDomainEndpoints:
 
     def test_domain_reputation_endpoint(self, client: TestClient, sample_domain: str) -> None:
         """Test domain reputation endpoint"""
-        response = client.get(f"/api/v1/domain/reputation?domain={sample_domain}")
+        response = client.get(f"/api/domain/reputation?domain={sample_domain}")
         assert response.status_code == 200
         data = response.json()
         assert "domain" in data
@@ -69,7 +69,7 @@ class TestDomainEndpoints:
 
     def test_domain_blacklist_endpoint(self, client: TestClient, sample_domain: str) -> None:
         """Test domain blacklist endpoint"""
-        response = client.get(f"/api/v1/domain/blacklist?domain={sample_domain}")
+        response = client.get(f"/api/domain/blacklist?domain={sample_domain}")
         assert response.status_code == 200
         data = response.json()
         assert "domain" in data
@@ -78,7 +78,7 @@ class TestDomainEndpoints:
 
     def test_domain_ssl_certificate_endpoint(self, client: TestClient, sample_domain: str) -> None:
         """Test domain SSL certificate endpoint"""
-        response = client.get(f"/api/v1/domain/ssl-certificate?domain={sample_domain}")
+        response = client.get(f"/api/domain/ssl-certificate?domain={sample_domain}")
         assert response.status_code == 200
         data = response.json()
         assert "domain" in data
@@ -87,7 +87,7 @@ class TestDomainEndpoints:
 
     def test_domain_subdomains_endpoint(self, client: TestClient, sample_domain: str) -> None:
         """Test domain subdomains endpoint"""
-        response = client.get(f"/api/v1/domain/subdomains?domain={sample_domain}")
+        response = client.get(f"/api/domain/subdomains?domain={sample_domain}")
         assert response.status_code == 200
         data = response.json()
         assert "domain" in data
@@ -96,7 +96,7 @@ class TestDomainEndpoints:
 
     def test_domain_hosting_endpoint(self, client: TestClient, sample_domain: str) -> None:
         """Test domain hosting endpoint"""
-        response = client.get(f"/api/v1/domain/hosting?domain={sample_domain}")
+        response = client.get(f"/api/domain/hosting?domain={sample_domain}")
         assert response.status_code == 200
         data = response.json()
         assert "domain" in data
@@ -104,12 +104,12 @@ class TestDomainEndpoints:
 
     def test_domain_invalid_format(self, client: TestClient) -> None:
         """Test domain endpoint with invalid domain format"""
-        response = client.get("/api/v1/domain/info?domain=invalid..domain")
+        response = client.get("/api/domain/info?domain=invalid..domain")
         assert response.status_code == 400
 
     def test_domain_internal_blocked(self, client: TestClient) -> None:
         """Test that internal domains are blocked"""
-        response = client.get("/api/v1/domain/info?domain=localhost")
+        response = client.get("/api/domain/info?domain=localhost")
         assert response.status_code == 400
         data = response.json()
         assert "detail" in data
