@@ -7,6 +7,9 @@ from project_argus.utils.validators import (
     DomainValidator,
     IPValidator,
     URLValidator,
+    validate_domain,
+    validate_ip,
+    validate_url,
 )
 
 
@@ -298,3 +301,149 @@ class TestIPValidator:
         """Test various valid public IP addresses"""
         validator = IPValidator(ip=ip)
         assert validator.ip
+
+
+class TestURLValidatorIsValidHostname:
+    """Additional tests targeting URLValidator._is_valid_hostname edge cases."""
+
+    def test_hostname_too_long_returns_false(self):
+        assert URLValidator._is_valid_hostname("a" * 254) is False
+
+    def test_empty_hostname_returns_false(self):
+        assert URLValidator._is_valid_hostname("") is False
+
+    def test_single_label_hostname_returns_false(self):
+        assert URLValidator._is_valid_hostname("singlelabel") is False
+
+    def test_label_too_long_returns_false(self):
+        long_label = "a" * 64
+        assert URLValidator._is_valid_hostname(f"{long_label}.com") is False
+
+    def test_empty_label_in_hostname_returns_false(self):
+        # double dot creates an empty label
+        assert URLValidator._is_valid_hostname("example..com") is False
+
+    def test_tld_with_digit_returns_false(self):
+        assert URLValidator._is_valid_hostname("example.c0m") is False
+
+    def test_valid_hostname_returns_true(self):
+        assert URLValidator._is_valid_hostname("example.com") is True
+
+    def test_idn_hostname_decoded(self):
+        # IDNA-encoded label — decode should succeed
+        result = URLValidator._is_valid_hostname("xn--nxasmq6b.com")
+        # Either True or False is acceptable; the important thing is no exception
+        assert isinstance(result, bool)
+
+
+class TestURLValidatorIsSuspiciousHost:
+    """Additional tests for URLValidator._is_suspicious_host."""
+
+    def test_localhost_is_suspicious(self):
+        assert URLValidator._is_suspicious_host("localhost") is True
+
+    def test_127_prefix_is_suspicious(self):
+        assert URLValidator._is_suspicious_host("127.0.0.1") is True
+
+    def test_zero_address_is_suspicious(self):
+        assert URLValidator._is_suspicious_host("0.0.0.0") is True
+
+    def test_ipv6_loopback_is_suspicious(self):
+        assert URLValidator._is_suspicious_host("::1") is True
+
+    def test_private_ipv4_is_suspicious(self):
+        assert URLValidator._is_suspicious_host("192.168.1.1") is True
+
+    def test_private_10_prefix_is_suspicious(self):
+        assert URLValidator._is_suspicious_host("10.0.0.1") is True
+
+    def test_public_ip_is_not_suspicious(self):
+        assert URLValidator._is_suspicious_host("8.8.8.8") is False
+
+    def test_regular_domain_is_not_suspicious(self):
+        assert URLValidator._is_suspicious_host("example.com") is False
+
+
+class TestURLValidatorSuspiciousURLPatterns:
+    """Test URLs that hit the SSRF/suspicious-host check path in validate_url."""
+
+    def test_0_0_0_0_rejected(self):
+        with pytest.raises(ValidationError):
+            URLValidator(url="http://0.0.0.0")
+
+    def test_ftp_url_rejected_as_no_scheme(self):
+        """ftp:// is added http:// prefix and then rejected for bad hostname."""
+        with pytest.raises(ValidationError):
+            URLValidator(url="ftp://example.com")
+
+
+class TestDomainValidatorEdgeCases:
+    """Additional coverage for DomainValidator."""
+
+    def test_ftp_protocol_stripped(self):
+        validator = DomainValidator(domain="ftp://example.com")
+        assert validator.domain == "example.com"
+
+    def test_domain_with_fragment_stripped(self):
+        validator = DomainValidator(domain="example.com#section")
+        assert validator.domain == "example.com"
+
+    def test_domain_with_ipv6_brackets_stripped(self):
+        """IPv6 bracketed addresses are stripped, then rejected as IP."""
+        with pytest.raises(ValidationError):
+            DomainValidator(domain="[::1]")
+
+    def test_domain_with_invalid_chars_in_label(self):
+        with pytest.raises(ValidationError):
+            DomainValidator(domain="exam!ple.com")
+
+    def test_empty_label_rejected(self):
+        with pytest.raises(ValidationError, match="empty label"):
+            DomainValidator(domain="example..com")
+
+    def test_numeric_only_tld_rejected(self):
+        with pytest.raises(ValidationError, match="Invalid TLD"):
+            DomainValidator(domain="example.123")
+
+    def test_suspicious_domain_localhost(self):
+        from project_argus.utils.validators import DomainValidator as DV
+
+        assert DV._is_suspicious_domain("localhost") is True
+
+    def test_suspicious_domain_example_tld(self):
+        from project_argus.utils.validators import DomainValidator as DV
+
+        assert DV._is_suspicious_domain("something.example") is True
+
+    def test_non_suspicious_domain(self):
+        from project_argus.utils.validators import DomainValidator as DV
+
+        assert DV._is_suspicious_domain("example.com") is False
+
+
+class TestStandaloneFunctions:
+    """Tests for the module-level validate_url, validate_domain, validate_ip helpers."""
+
+    def test_validate_url_valid(self):
+        result = validate_url("https://example.com")
+        assert result == "https://example.com"
+
+    def test_validate_url_invalid_raises(self):
+        with pytest.raises(ValueError):
+            validate_url("http://localhost")
+
+    def test_validate_domain_valid(self):
+        result = validate_domain("example.com")
+        assert result == "example.com"
+
+    def test_validate_domain_invalid_raises(self):
+        with pytest.raises(ValueError):
+            validate_domain("localhost")
+
+    def test_validate_ip_valid(self):
+        result = validate_ip("8.8.8.8")
+        assert result == "8.8.8.8"
+
+    def test_validate_ip_invalid_raises(self):
+        with pytest.raises(ValueError):
+            validate_ip("127.0.0.1")

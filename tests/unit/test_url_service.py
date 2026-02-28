@@ -1,4 +1,4 @@
-"""Unit tests for URLService.check_status redirect handling."""
+"""Unit tests for URLService.check_status redirect handling and get_headers."""
 
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -292,3 +292,144 @@ class TestCheckStatusNetworkError:
         # The first hop (301) should still be in the chain
         assert len(result.redirect_chain) == 1
         assert result.redirect_chain[0].status_code == 301
+
+
+@pytest.mark.asyncio
+class TestCheckStatusClientSideRedirect:
+    """Client-side redirects via meta-refresh or JS location."""
+
+    def _resp_html(self, status: int, html: str, content_type: str = "text/html") -> MagicMock:
+        r = MagicMock()
+        r.status_code = status
+        r.headers = {"content-type": content_type}
+        r.text = html
+        return r
+
+    async def test_meta_refresh_followed(self):
+        """A 200 page with a meta-refresh should be followed as a client redirect."""
+        html_redirect = (
+            '<html><head><meta http-equiv="refresh" content="0; url=https://dest.example.com">'
+            "</head></html>"
+        )
+        final_resp = MagicMock()
+        final_resp.status_code = 200
+        final_resp.headers = {"content-type": "text/html"}
+        final_resp.text = "<html><body>Done</body></html>"
+
+        mock_client = AsyncMock()
+        mock_client.get = AsyncMock(
+            side_effect=[
+                self._resp_html(200, html_redirect),
+                final_resp,
+            ]
+        )
+        cm = MagicMock()
+        cm.__aenter__ = AsyncMock(return_value=mock_client)
+        cm.__aexit__ = AsyncMock(return_value=False)
+
+        with patch("project_argus.services.url_service.httpx.AsyncClient", return_value=cm):
+            result = await URLService().check_status("https://src.example.com")
+
+        assert result.final_url == "https://dest.example.com"
+        assert result.status_code == 200
+        # The chain should show at least 2 hops
+        assert len(result.redirect_chain) >= 2
+
+    async def test_non_html_content_not_parsed(self):
+        """Binary/JSON responses should not attempt client-side redirect extraction."""
+        r = MagicMock()
+        r.status_code = 200
+        r.headers = {"content-type": "application/json"}
+        r.text = '{"key": "value"}'
+
+        mock_client = AsyncMock()
+        mock_client.get = AsyncMock(return_value=r)
+        cm = MagicMock()
+        cm.__aenter__ = AsyncMock(return_value=mock_client)
+        cm.__aexit__ = AsyncMock(return_value=False)
+
+        with patch("project_argus.services.url_service.httpx.AsyncClient", return_value=cm):
+            result = await URLService().check_status("https://api.example.com")
+
+        # Should stop immediately — no client redirect parsed
+        assert result.status_code == 200
+        assert result.redirect_count == 0
+
+    async def test_client_redirect_to_already_seen_url_stops(self):
+        """If the client-side redirect points to an already-visited URL, we stop."""
+        seen_html = (
+            '<html><head><meta http-equiv="refresh" content="0; url=https://src.example.com">'
+            "</head></html>"
+        )
+        r = self._resp_html(200, seen_html)
+
+        mock_client = AsyncMock()
+        mock_client.get = AsyncMock(return_value=r)
+        cm = MagicMock()
+        cm.__aenter__ = AsyncMock(return_value=mock_client)
+        cm.__aexit__ = AsyncMock(return_value=False)
+
+        with patch("project_argus.services.url_service.httpx.AsyncClient", return_value=cm):
+            result = await URLService().check_status("https://src.example.com")
+
+        # Should stop — the meta-refresh URL is the same as the source
+        assert result.status_code == 200
+
+
+@pytest.mark.asyncio
+class TestGetHeaders:
+    """Tests for URLService.get_headers()"""
+
+    async def test_returns_headers_response(self):
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.headers = {"content-type": "text/html", "server": "nginx"}
+
+        mock_client = AsyncMock()
+        mock_client.head = AsyncMock(return_value=mock_response)
+        cm = MagicMock()
+        cm.__aenter__ = AsyncMock(return_value=mock_client)
+        cm.__aexit__ = AsyncMock(return_value=False)
+
+        with patch("project_argus.services.url_service.httpx.AsyncClient", return_value=cm):
+            result = await URLService().get_headers("https://example.com")
+
+        assert result.url == "https://example.com"
+        assert result.status_code == 200
+        assert result.headers["content-type"] == "text/html"
+        assert result.headers["server"] == "nginx"
+
+    async def test_uses_head_method(self):
+        """Verify that get_headers uses the HEAD method (not GET)."""
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.headers = {}
+
+        mock_client = AsyncMock()
+        mock_client.head = AsyncMock(return_value=mock_response)
+        cm = MagicMock()
+        cm.__aenter__ = AsyncMock(return_value=mock_client)
+        cm.__aexit__ = AsyncMock(return_value=False)
+
+        with patch("project_argus.services.url_service.httpx.AsyncClient", return_value=cm):
+            await URLService().get_headers("https://example.com")
+
+        mock_client.head.assert_called_once_with("https://example.com")
+
+    async def test_headers_dict_conversion(self):
+        """Response headers should be converted to a plain dict."""
+        mock_response = MagicMock()
+        mock_response.status_code = 301
+        mock_response.headers = {"location": "https://www.example.com"}
+
+        mock_client = AsyncMock()
+        mock_client.head = AsyncMock(return_value=mock_response)
+        cm = MagicMock()
+        cm.__aenter__ = AsyncMock(return_value=mock_client)
+        cm.__aexit__ = AsyncMock(return_value=False)
+
+        with patch("project_argus.services.url_service.httpx.AsyncClient", return_value=cm):
+            result = await URLService().get_headers("https://example.com")
+
+        assert isinstance(result.headers, dict)
+        assert result.status_code == 301
