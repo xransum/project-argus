@@ -64,9 +64,7 @@ class URLValidator(BaseModel):
             or parsed.hostname.startswith("127.")
             or parsed.hostname.startswith("192.168.")
         ):
-            raise ValueError(
-                "URL cannot point to localhost or private IP address"
-            )
+            raise ValueError("URL cannot point to localhost or private IP address")
 
         # Check for overly long URLs (potential DoS)
         if len(url) > 2048:
@@ -103,9 +101,7 @@ class URLValidator(BaseModel):
         for label in labels:
             if not label or len(label) > 63:
                 return False
-            if not re.match(
-                r"^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$", label, re.IGNORECASE
-            ):
+            if not re.match(r"^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$", label, re.IGNORECASE):
                 return False
 
         # Validate TLD
@@ -136,12 +132,7 @@ class URLValidator(BaseModel):
         # Check if it's a private IP
         try:
             ip = ipaddress.ip_address(hostname)
-            if (
-                ip.is_private
-                or ip.is_loopback
-                or ip.is_link_local
-                or ip.is_reserved
-            ):
+            if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved:
                 return True
         except ValueError:
             pass
@@ -188,9 +179,7 @@ class DomainValidator(BaseModel):
         # Check if it's actually an IP address
         try:
             ipaddress.ip_address(domain)
-            raise ValueError(
-                f"Expected domain name, got IP address: {domain}"
-            ) from None
+            raise ValueError(f"Expected domain name, got IP address: {domain}") from None
         except ValueError as e:
             if "Expected domain" in str(e):
                 raise
@@ -204,9 +193,7 @@ class DomainValidator(BaseModel):
 
         # Check length
         if len(domain) > 253:
-            raise ValueError(
-                "Domain name exceeds maximum length (253 characters)"
-            )
+            raise ValueError("Domain name exceeds maximum length (253 characters)")
 
         if len(domain) < 3:
             raise ValueError("Domain name too short")
@@ -226,16 +213,12 @@ class DomainValidator(BaseModel):
                 raise ValueError("Domain contains empty label")
 
             if len(label) > 63:
-                raise ValueError(
-                    "Domain label exceeds maximum length (63 characters)"
-                )
+                raise ValueError("Domain label exceeds maximum length (63 characters)")
 
             if label.startswith("-") or label.endswith("-"):
                 raise ValueError("Domain label cannot start or end with hyphen")
 
-            if not re.match(
-                r"^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$", label, re.IGNORECASE
-            ):
+            if not re.match(r"^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$", label, re.IGNORECASE):
                 raise ValueError(f"Invalid characters in domain label: {label}")
 
         # Validate TLD
@@ -294,10 +277,9 @@ class IPValidator(BaseModel):
         except ValueError as e:
             raise ValueError(f"Invalid IP address format: {str(e)}") from e
 
-        # Security checks
-        if ip.is_private:
-            raise ValueError("Private IP addresses are not allowed")
-
+        # Security checks — order matters: specific checks before the catch-all
+        # is_private (Python 3.11+) subsumes loopback, link-local, unspecified,
+        # reserved, and multicast, so we must check specific categories first.
         if ip.is_loopback:
             raise ValueError("Loopback IP addresses are not allowed")
 
@@ -310,12 +292,15 @@ class IPValidator(BaseModel):
         if ip.is_unspecified:
             raise ValueError("Unspecified IP addresses are not allowed")
 
+        # Check for IPv4-mapped IPv6 before is_reserved (they overlap in Python 3.11)
+        if isinstance(ip, ipaddress.IPv6Address) and ip.ipv4_mapped:
+            raise ValueError("IPv4-mapped IPv6 addresses are not allowed")
+
         if ip.is_reserved:
             raise ValueError("Reserved IP addresses are not allowed")
 
-        # Check for IPv4-mapped IPv6
-        if isinstance(ip, ipaddress.IPv6Address) and ip.ipv4_mapped:
-            raise ValueError("IPv4-mapped IPv6 addresses are not allowed")
+        if ip.is_private:
+            raise ValueError("Private IP addresses are not allowed")
 
         return str(ip)
 
