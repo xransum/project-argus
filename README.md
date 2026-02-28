@@ -218,34 +218,34 @@ GET /health           # Health check endpoint
 ### URL Endpoints
 
 ```
-GET /api/v1/url/status?url=<url>       # Check URL status
-GET /api/v1/url/headers?url=<url>      # Fetch URL headers
+GET /api/url/status?url=<url>       # Check URL status
+GET /api/url/headers?url=<url>      # Fetch URL headers
 ```
 
 ### Domain Endpoints
 
 ```
-GET /api/v1/domain/info?domain=<domain>
-GET /api/v1/domain/ssl?domain=<domain>
-GET /api/v1/domain/dns?domain=<domain>&record_type=A
-GET /api/v1/domain/whois?domain=<domain>
-GET /api/v1/domain/geoip?domain=<domain>
-GET /api/v1/domain/reputation?domain=<domain>
-GET /api/v1/domain/blacklist?domain=<domain>
-GET /api/v1/domain/ssl-certificate?domain=<domain>
-GET /api/v1/domain/subdomains?domain=<domain>
-GET /api/v1/domain/hosting?domain=<domain>
+GET /api/domain/info?domain=<domain>
+GET /api/domain/ssl?domain=<domain>
+GET /api/domain/dns?domain=<domain>&record_type=A
+GET /api/domain/whois?domain=<domain>
+GET /api/domain/geoip?domain=<domain>
+GET /api/domain/reputation?domain=<domain>
+GET /api/domain/blacklist?domain=<domain>
+GET /api/domain/ssl-certificate?domain=<domain>
+GET /api/domain/subdomains?domain=<domain>
+GET /api/domain/hosting?domain=<domain>
 ```
 
 ### IP Endpoints
 
 ```
-GET /api/v1/ip/info?ip=<ip>
-GET /api/v1/ip/dns?ip=<ip>
-GET /api/v1/ip/geoip?ip=<ip>
-GET /api/v1/ip/reputation?ip=<ip>
-GET /api/v1/ip/blacklist?ip=<ip>
-GET /api/v1/ip/whois?ip=<ip>
+GET /api/ip/info?ip=<ip>
+GET /api/ip/dns?ip=<ip>
+GET /api/ip/geoip?ip=<ip>
+GET /api/ip/reputation?ip=<ip>
+GET /api/ip/blacklist?ip=<ip>
+GET /api/ip/whois?ip=<ip>
 ```
 
 ## Usage Examples
@@ -253,9 +253,9 @@ GET /api/v1/ip/whois?ip=<ip>
 ### cURL
 
 ```bash
-curl "http://localhost:8000/api/v1/url/status?url=https://example.com"
-curl "http://localhost:8000/api/v1/domain/whois?domain=example.com"
-curl "http://localhost:8000/api/v1/ip/reputation?ip=8.8.8.8"
+curl "http://localhost:8000/api/url/status?url=https://example.com"
+curl "http://localhost:8000/api/domain/whois?domain=example.com"
+curl "http://localhost:8000/api/ip/reputation?ip=8.8.8.8"
 ```
 
 ### Python
@@ -265,7 +265,7 @@ import httpx
 
 async with httpx.AsyncClient() as client:
     response = await client.get(
-        "http://localhost:8000/api/v1/url/status",
+        "http://localhost:8000/api/url/status",
         params={"url": "https://example.com"}
     )
     print(response.json())
@@ -276,7 +276,7 @@ async with httpx.AsyncClient() as client:
 ```
 project-argus/
 ├── src/project_argus/
-│   ├── api/v1/              # API endpoints
+│   ├── api/              # API endpoints
 │   ├── models/              # Pydantic models
 │   ├── services/            # Business logic
 │   ├── utils/               # Utilities (validators, etc.)
