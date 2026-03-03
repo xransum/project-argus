@@ -18,47 +18,6 @@ class TestIPEndpoints:
         assert data["status"] == "pending"
         assert data["total"] == 1
 
-    def test_ip_geoip_endpoint(self, client: TestClient, sample_ip: str):
-        """Test IP geoip endpoint returns a job"""
-        response = client.post("/api/ip/geoip", json={"ips": [sample_ip]})
-        assert response.status_code == 202
-        data = response.json()
-        assert "job_id" in data
-        assert data["job_type"] == "ip/geoip"
-        assert data["total"] == 1
-
-    def test_ip_reputation_endpoint(self, client: TestClient, sample_ip: str):
-        """Test IP reputation endpoint returns a job"""
-        response = client.post("/api/ip/reputation", json={"ips": [sample_ip]})
-        assert response.status_code == 202
-        data = response.json()
-        assert "job_id" in data
-        assert data["job_type"] == "ip/reputation"
-
-    def test_ip_dns_endpoint(self, client: TestClient, sample_ip: str):
-        """Test IP reverse DNS endpoint returns a job"""
-        response = client.post("/api/ip/dns", json={"ips": [sample_ip]})
-        assert response.status_code == 202
-        data = response.json()
-        assert "job_id" in data
-        assert data["job_type"] == "ip/dns"
-
-    def test_ip_blacklist_endpoint(self, client: TestClient, sample_ip: str):
-        """Test IP blacklist endpoint returns a job"""
-        response = client.post("/api/ip/blacklist", json={"ips": [sample_ip]})
-        assert response.status_code == 202
-        data = response.json()
-        assert "job_id" in data
-        assert data["job_type"] == "ip/blacklist"
-
-    def test_ip_whois_endpoint(self, client: TestClient, sample_ip: str):
-        """Test IP WHOIS endpoint returns a job"""
-        response = client.post("/api/ip/whois", json={"ips": [sample_ip]})
-        assert response.status_code == 202
-        data = response.json()
-        assert "job_id" in data
-        assert data["job_type"] == "ip/whois"
-
     def test_ip_bulk_multiple(self, client: TestClient, valid_ips: list):
         """Test IP endpoint accepts multiple IPs"""
         response = client.post("/api/ip/info", json={"ips": valid_ips})

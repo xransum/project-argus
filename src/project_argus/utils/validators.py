@@ -6,7 +6,7 @@ from urllib.parse import unquote, urlparse
 
 import idna
 from fastapi import Query
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, ValidationError, field_validator
 from typing_extensions import Annotated
 
 
@@ -305,10 +305,39 @@ class IPValidator(BaseModel):
         return str(ip)
 
 
+class TargetValidator(BaseModel):
+    """Validate a target that may be either a domain name or an IP address."""
+
+    target: str
+
+    @field_validator("target")
+    @classmethod
+    def validate_target(cls, v: str) -> str:
+        if not v or not v.strip():
+            raise ValueError("Target cannot be empty")
+
+        raw = v.strip()
+
+        # Try IP first
+        try:
+            return IPValidator(ip=raw).ip
+        except (ValidationError, ValueError):
+            pass
+
+        # Fall back to domain
+        try:
+            return DomainValidator(domain=raw).domain
+        except (ValidationError, ValueError) as exc:
+            raise ValueError(
+                f"Target is neither a valid IP address nor a valid domain: {raw}"
+            ) from exc
+
+
 # Type aliases for FastAPI endpoints
 ValidatedURL = Annotated[str, Query(..., description="URL to validate")]
 ValidatedDomain = Annotated[str, Query(..., description="Domain to validate")]
 ValidatedIP = Annotated[str, Query(..., description="IP address to validate")]
+ValidatedTarget = Annotated[str, Query(..., description="Domain or IP address to validate")]
 
 
 def validate_url(url: str) -> str:
@@ -324,3 +353,8 @@ def validate_domain(domain: str) -> str:
 def validate_ip(ip: str) -> str:
     """Validate and sanitize IP address"""
     return IPValidator(ip=ip).ip
+
+
+def validate_target(target: str) -> str:
+    """Validate and sanitize a domain or IP address target"""
+    return TargetValidator(target=target).target

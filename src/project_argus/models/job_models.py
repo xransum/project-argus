@@ -28,6 +28,12 @@ class IPBulkRequest(BaseModel):
     ips: List[str] = Field(..., min_length=1, description="List of IP addresses to process")
 
 
+class TargetBulkRequest(BaseModel):
+    targets: List[str] = Field(
+        ..., min_length=1, description="List of domains or IP addresses to process"
+    )
+
+
 # ---------------------------------------------------------------------------
 # Job response shapes
 # ---------------------------------------------------------------------------

@@ -11,7 +11,7 @@ from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from .api import domain, ip, jobs, url
+from .api import blacklist, dns, domain, geoip, http, ip, jobs, reputation, ssl, whois
 from .db import init_db
 
 logger = logging.getLogger(__name__)
@@ -54,10 +54,27 @@ app.add_middleware(
 
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
-app.include_router(url.router, prefix="/api/url")
+# HTTP/URL checks
+app.include_router(http.router, prefix="/api/http")
+
+# Unified (domain + IP) checks
+app.include_router(dns.router, prefix="/api/dns")
+app.include_router(whois.router, prefix="/api/whois")
+app.include_router(geoip.router, prefix="/api/geoip")
+app.include_router(reputation.router, prefix="/api/reputation")
+app.include_router(blacklist.router, prefix="/api/blacklist")
+
+# SSL — domain-specific
+app.include_router(ssl.router, prefix="/api/ssl")
+
+# Domain-specific
 app.include_router(domain.router, prefix="/api/domain")
+
+# IP-specific
 app.include_router(ip.router, prefix="/api/ip")
-app.include_router(jobs.router, prefix="/jobs")
+
+# Job management
+app.include_router(jobs.router, prefix="/api/jobs")
 
 
 # ---------------------------------------------------------------------------
@@ -84,20 +101,81 @@ def _ep(path: str, label: str, desc: str, param: str, placeholder: str) -> dict:
 
 _ENDPOINTS = {
     "v1": {
-        "URL": {
+        "HTTP": {
             "status": _ep(
-                "/api/url/status",
+                "/api/http/status",
                 "HTTP Status Check",
                 "Fetch the HTTP status code returned by each URL.",
                 "urls",
                 "https://example.com\nhttps://google.com",
             ),
             "headers": _ep(
-                "/api/url/headers",
+                "/api/http/headers",
                 "HTTP Headers",
                 "Retrieve the full set of HTTP response headers for each URL.",
                 "urls",
                 "https://example.com\nhttps://google.com",
+            ),
+        },
+        "DNS": {
+            "lookup": _ep(
+                "/api/dns/lookup",
+                "DNS Lookup",
+                "Perform DNS lookups for domains (forward) or IPs (reverse PTR).",
+                "targets",
+                "example.com\n1.1.1.1",
+            ),
+        },
+        "WHOIS": {
+            "lookup": _ep(
+                "/api/whois/lookup",
+                "WHOIS Lookup",
+                "Fetch WHOIS registration data for domains or IPs.",
+                "targets",
+                "example.com\n1.1.1.1",
+            ),
+        },
+        "GeoIP": {
+            "lookup": _ep(
+                "/api/geoip/lookup",
+                "GeoIP Location",
+                "Resolve the geographic location of domains or IPs.",
+                "targets",
+                "example.com\n1.1.1.1",
+            ),
+        },
+        "Reputation": {
+            "check": _ep(
+                "/api/reputation/check",
+                "Reputation Score",
+                "Check the threat-intelligence reputation score for domains or IPs.",
+                "targets",
+                "example.com\n1.1.1.1",
+            ),
+        },
+        "Blacklist": {
+            "check": _ep(
+                "/api/blacklist/check",
+                "Blacklist Check",
+                "Test whether domains or IPs appear on known blacklists.",
+                "targets",
+                "example.com\n1.1.1.1",
+            ),
+        },
+        "SSL": {
+            "info": _ep(
+                "/api/ssl/info",
+                "SSL Check",
+                "Verify whether each domain has a valid, unexpired SSL certificate.",
+                "domains",
+                "example.com\ngoogle.com",
+            ),
+            "certificate": _ep(
+                "/api/ssl/certificate",
+                "SSL Certificate Details",
+                "Retrieve the full SSL certificate chain and details for each domain.",
+                "domains",
+                "example.com\ngoogle.com",
             ),
         },
         "Domain": {
@@ -105,55 +183,6 @@ _ENDPOINTS = {
                 "/api/domain/info",
                 "Domain Info",
                 "Look up registrar, registration date, and expiry for each domain.",
-                "domains",
-                "example.com\ngoogle.com",
-            ),
-            "ssl": _ep(
-                "/api/domain/ssl",
-                "SSL Check",
-                "Verify whether each domain has a valid, unexpired SSL certificate.",
-                "domains",
-                "example.com\ngoogle.com",
-            ),
-            "dns": _ep(
-                "/api/domain/dns",
-                "DNS Records",
-                "Retrieve DNS records (A, MX, TXT, etc.) for each domain.",
-                "domains",
-                "example.com\ngoogle.com",
-            ),
-            "whois": _ep(
-                "/api/domain/whois",
-                "WHOIS Lookup",
-                "Fetch raw WHOIS registration data for each domain.",
-                "domains",
-                "example.com\ngoogle.com",
-            ),
-            "geoip": _ep(
-                "/api/domain/geoip",
-                "GeoIP Location",
-                "Resolve the geographic location of the server behind each domain.",
-                "domains",
-                "example.com\ngoogle.com",
-            ),
-            "reputation": _ep(
-                "/api/domain/reputation",
-                "Reputation Score",
-                "Check the threat-intelligence reputation score for each domain.",
-                "domains",
-                "example.com\ngoogle.com",
-            ),
-            "blacklist": _ep(
-                "/api/domain/blacklist",
-                "Blacklist Check",
-                "Test whether each domain appears on known blacklists.",
-                "domains",
-                "example.com\ngoogle.com",
-            ),
-            "ssl-certificate": _ep(
-                "/api/domain/ssl-certificate",
-                "SSL Certificate Details",
-                "Retrieve the full SSL certificate chain and details for each domain.",
                 "domains",
                 "example.com\ngoogle.com",
             ),
@@ -180,41 +209,6 @@ _ENDPOINTS = {
                 "ips",
                 "1.1.1.1\n8.8.8.8",
             ),
-            "dns": _ep(
-                "/api/ip/dns",
-                "Reverse DNS",
-                "Perform a reverse DNS (PTR record) lookup for each IP address.",
-                "ips",
-                "1.1.1.1\n8.8.8.8",
-            ),
-            "geoip": _ep(
-                "/api/ip/geoip",
-                "GeoIP Location",
-                "Resolve the geographic location associated with each IP address.",
-                "ips",
-                "1.1.1.1\n8.8.8.8",
-            ),
-            "reputation": _ep(
-                "/api/ip/reputation",
-                "Reputation Score",
-                "Check the threat-intelligence reputation score for each IP address.",
-                "ips",
-                "1.1.1.1\n8.8.8.8",
-            ),
-            "blacklist": _ep(
-                "/api/ip/blacklist",
-                "Blacklist Check",
-                "Test whether each IP address appears on known blacklists.",
-                "ips",
-                "1.1.1.1\n8.8.8.8",
-            ),
-            "whois": _ep(
-                "/api/ip/whois",
-                "WHOIS Lookup",
-                "Fetch raw WHOIS registration data for each IP address.",
-                "ips",
-                "1.1.1.1\n8.8.8.8",
-            ),
         },
     }
 }
@@ -234,32 +228,24 @@ async def api_root() -> Dict[str, Any]:
         "version": "1.0.0",
         "documentation": "/docs",
         "endpoints": {
-            "url": ["/api/url/status", "/api/url/headers"],
+            "http": ["/api/http/status", "/api/http/headers"],
+            "dns": ["/api/dns/lookup"],
+            "whois": ["/api/whois/lookup"],
+            "geoip": ["/api/geoip/lookup"],
+            "reputation": ["/api/reputation/check"],
+            "blacklist": ["/api/blacklist/check"],
+            "ssl": ["/api/ssl/info", "/api/ssl/certificate"],
             "domain": [
                 "/api/domain/info",
-                "/api/domain/ssl",
-                "/api/domain/dns",
-                "/api/domain/whois",
-                "/api/domain/geoip",
-                "/api/domain/reputation",
-                "/api/domain/blacklist",
-                "/api/domain/ssl-certificate",
                 "/api/domain/subdomains",
                 "/api/domain/hosting",
             ],
-            "ip": [
-                "/api/ip/info",
-                "/api/ip/dns",
-                "/api/ip/geoip",
-                "/api/ip/reputation",
-                "/api/ip/blacklist",
-                "/api/ip/whois",
-            ],
+            "ip": ["/api/ip/info"],
         },
         "jobs": {
-            "status": "/jobs/{job_id}/status",
-            "results": "/jobs/{job_id}/results",
-            "results_paginated": "/jobs/{job_id}/results?nextToken={token}",
+            "status": "/api/jobs/{job_id}",
+            "results": "/api/jobs/{job_id}/results",
+            "results_paginated": "/api/jobs/{job_id}/results?nextToken={token}",
         },
     }
 

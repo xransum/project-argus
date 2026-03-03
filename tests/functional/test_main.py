@@ -41,7 +41,13 @@ class TestAPIRoot:
     def test_api_root_has_endpoints(self, client):
         data = client.get("/api").json()
         assert "endpoints" in data
-        assert "url" in data["endpoints"]
+        assert "http" in data["endpoints"]
+        assert "dns" in data["endpoints"]
+        assert "whois" in data["endpoints"]
+        assert "geoip" in data["endpoints"]
+        assert "reputation" in data["endpoints"]
+        assert "blacklist" in data["endpoints"]
+        assert "ssl" in data["endpoints"]
         assert "domain" in data["endpoints"]
         assert "ip" in data["endpoints"]
 

@@ -1,4 +1,4 @@
-"""Domain-specific bulk API endpoints — all operations accept POST with a list of domains."""
+"""SSL/TLS Check bulk API endpoints — domain-specific, accepts POST with a list of domains."""
 
 import logging
 
@@ -10,14 +10,11 @@ from ..services.job_service import enqueue_job
 from ..utils.validators import DomainValidator
 
 logger = logging.getLogger(__name__)
-router = APIRouter(tags=["Domain"])
+router = APIRouter(tags=["SSL"])
 
 
 def _validate_domains(domains: list) -> list:
-    """Validate each domain and return the sanitised list.
-
-    Raises HTTPException(400) listing every failing entry.
-    """
+    """Validate each domain and return the sanitised list."""
     sanitised = []
     errors = []
     for i, raw in enumerate(domains):
@@ -32,41 +29,27 @@ def _validate_domains(domains: list) -> list:
 
 
 @router.post("/info", response_model=JobCreatedResponse, status_code=202)
-async def bulk_domain_info(body: DomainBulkRequest) -> JobCreatedResponse:
-    """Fetch registrar / creation-date info for a list of domains."""
+async def bulk_ssl_info(body: DomainBulkRequest) -> JobCreatedResponse:
+    """Check SSL certificate validity for a list of domains and return a job ID."""
     sanitised = _validate_domains(body.domains)
-    job_id = await enqueue_job("domain/info", sanitised)
+    job_id = await enqueue_job("ssl/info", sanitised)
     return JobCreatedResponse(
         job_id=job_id,
-        job_type="domain/info",
+        job_type="ssl/info",
         status="pending",
         total=len(sanitised),
         message="Job enqueued. Poll /api/jobs/{job_id} for progress.",
     )
 
 
-@router.post("/subdomains", response_model=JobCreatedResponse, status_code=202)
-async def bulk_domain_subdomains(body: DomainBulkRequest) -> JobCreatedResponse:
-    """Enumerate subdomains for a list of domains."""
+@router.post("/certificate", response_model=JobCreatedResponse, status_code=202)
+async def bulk_ssl_certificate(body: DomainBulkRequest) -> JobCreatedResponse:
+    """Fetch full SSL certificate details for a list of domains and return a job ID."""
     sanitised = _validate_domains(body.domains)
-    job_id = await enqueue_job("domain/subdomains", sanitised)
+    job_id = await enqueue_job("ssl/certificate", sanitised)
     return JobCreatedResponse(
         job_id=job_id,
-        job_type="domain/subdomains",
-        status="pending",
-        total=len(sanitised),
-        message="Job enqueued. Poll /api/jobs/{job_id} for progress.",
-    )
-
-
-@router.post("/hosting", response_model=JobCreatedResponse, status_code=202)
-async def bulk_domain_hosting(body: DomainBulkRequest) -> JobCreatedResponse:
-    """Fetch hosting / ASN information for a list of domains."""
-    sanitised = _validate_domains(body.domains)
-    job_id = await enqueue_job("domain/hosting", sanitised)
-    return JobCreatedResponse(
-        job_id=job_id,
-        job_type="domain/hosting",
+        job_type="ssl/certificate",
         status="pending",
         total=len(sanitised),
         message="Job enqueued. Poll /api/jobs/{job_id} for progress.",

@@ -78,7 +78,7 @@ class TestGetJobStatus:
 
         with patch("project_argus.api.jobs.get_db", side_effect=_fake_get_db):
             with patch("project_argus.api.jobs.get_job", new_callable=AsyncMock, return_value=job):
-                response = client.get("/jobs/job-abc/status")
+                response = client.get("/api/jobs/job-abc")
 
         assert response.status_code == 200
         data = response.json()
@@ -98,7 +98,7 @@ class TestGetJobStatus:
 
         with patch("project_argus.api.jobs.get_db", side_effect=_fake_get_db):
             with patch("project_argus.api.jobs.get_job", new_callable=AsyncMock, return_value=None):
-                response = client.get("/jobs/nonexistent-id/status")
+                response = client.get("/api/jobs/nonexistent-id")
 
         assert response.status_code == 404
         assert "not found" in response.json()["detail"]
@@ -114,7 +114,7 @@ class TestGetJobStatus:
 
         with patch("project_argus.api.jobs.get_db", side_effect=_fake_get_db):
             with patch("project_argus.api.jobs.get_job", new_callable=AsyncMock, return_value=job):
-                response = client.get("/jobs/job-abc/status")
+                response = client.get("/api/jobs/job-abc")
 
         assert response.status_code == 200
         assert response.json()["pending"] == 0
@@ -142,7 +142,7 @@ class TestGetJobResults:
                     new_callable=AsyncMock,
                     return_value=rows,
                 ):
-                    response = client.get("/jobs/job-abc/results")
+                    response = client.get("/api/jobs/job-abc/results")
 
         assert response.status_code == 200
         data = response.json()
@@ -159,12 +159,12 @@ class TestGetJobResults:
 
         with patch("project_argus.api.jobs.get_db", side_effect=_fake_get_db):
             with patch("project_argus.api.jobs.get_job", new_callable=AsyncMock, return_value=None):
-                response = client.get("/jobs/missing-job/results")
+                response = client.get("/api/jobs/missing-job/results")
 
         assert response.status_code == 404
 
     def test_returns_400_for_invalid_next_token(self, client):
-        response = client.get("/jobs/job-abc/results?nextToken=not-a-number")
+        response = client.get("/api/jobs/job-abc/results?nextToken=not-a-number")
         assert response.status_code == 400
         assert "Invalid nextToken" in response.json()["detail"]
 
@@ -191,7 +191,7 @@ class TestGetJobResults:
                     new_callable=AsyncMock,
                     return_value=rows,
                 ):
-                    response = client.get("/jobs/job-abc/results")
+                    response = client.get("/api/jobs/job-abc/results")
 
         assert response.status_code == 200
         data = response.json()
@@ -213,7 +213,7 @@ class TestGetJobResults:
                     new_callable=AsyncMock,
                     return_value=rows,
                 ) as mock_page:
-                    response = client.get("/jobs/job-abc/results?nextToken=50")
+                    response = client.get("/api/jobs/job-abc/results?nextToken=50")
 
         assert response.status_code == 200
         # Verify after_id=50 was passed
@@ -236,7 +236,7 @@ class TestGetJobResults:
                     new_callable=AsyncMock,
                     return_value=rows,
                 ):
-                    response = client.get("/jobs/job-abc/results")
+                    response = client.get("/api/jobs/job-abc/results")
 
         item = response.json()["items"][0]
         assert "id" in item

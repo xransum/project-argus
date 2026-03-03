@@ -17,8 +17,8 @@ class TestValidatorIntegration:
     """Test validators integrated with API endpoints."""
 
     def test_url_validation_rejects_localhost(self, client):
-        """Localhost URLs should be rejected by the URL endpoint with HTTP 400."""
-        response = client.post("/api/url/status", json={"urls": ["http://localhost"]})
+        """Localhost URLs should be rejected by the HTTP endpoint with HTTP 400."""
+        response = client.post("/api/http/status", json={"urls": ["http://localhost"]})
         assert response.status_code == 400
 
     def test_domain_validation_rejects_ip_address(self, client):
@@ -36,10 +36,10 @@ class TestValidatorIntegration:
         from unittest.mock import AsyncMock, patch
 
         with patch(
-            "project_argus.api.url.enqueue_job",
+            "project_argus.api.http.enqueue_job",
             new=AsyncMock(return_value="fake-job-id"),
         ):
-            response = client.post("/api/url/status", json={"urls": ["https://example.com"]})
+            response = client.post("/api/http/status", json={"urls": ["https://example.com"]})
 
         assert response.status_code == 202
         data = response.json()
@@ -58,3 +58,36 @@ class TestValidatorIntegration:
         assert response.status_code == 202
         data = response.json()
         assert "job_id" in data
+
+    def test_target_endpoint_accepts_domain(self, client):
+        """A valid domain passes validation on a target endpoint (HTTP 202)."""
+        from unittest.mock import AsyncMock, patch
+
+        with patch(
+            "project_argus.api.dns.enqueue_job",
+            new=AsyncMock(return_value="fake-job-id"),
+        ):
+            response = client.post("/api/dns/lookup", json={"targets": ["example.com"]})
+
+        assert response.status_code == 202
+        data = response.json()
+        assert "job_id" in data
+
+    def test_target_endpoint_accepts_ip(self, client):
+        """A valid public IP passes validation on a target endpoint (HTTP 202)."""
+        from unittest.mock import AsyncMock, patch
+
+        with patch(
+            "project_argus.api.dns.enqueue_job",
+            new=AsyncMock(return_value="fake-job-id"),
+        ):
+            response = client.post("/api/dns/lookup", json={"targets": ["8.8.8.8"]})
+
+        assert response.status_code == 202
+        data = response.json()
+        assert "job_id" in data
+
+    def test_target_endpoint_rejects_private_ip(self, client):
+        """A private IP should be rejected on a target endpoint with HTTP 400."""
+        response = client.post("/api/dns/lookup", json={"targets": ["192.168.1.1"]})
+        assert response.status_code == 400

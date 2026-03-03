@@ -1,6 +1,7 @@
 """Job service — enqueues jobs and runs background workers."""
 
 import asyncio
+import ipaddress
 import logging
 import uuid
 from datetime import datetime, timezone
@@ -25,6 +26,20 @@ _domain_service = DomainService()
 _ip_service = IPService()
 
 # ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+
+def _is_ip(value: str) -> bool:
+    """Return True if *value* is a valid IP address (v4 or v6)."""
+    try:
+        ipaddress.ip_address(value)
+        return True
+    except ValueError:
+        return False
+
+
+# ---------------------------------------------------------------------------
 # Dispatcher: maps job_type -> async callable(input) -> dict
 # ---------------------------------------------------------------------------
 
@@ -32,53 +47,76 @@ _ip_service = IPService()
 # serialisable dict.  We use pydantic's .model_dump() to convert responses.
 
 
-async def _url_status(item: str) -> Dict[str, Any]:
+# HTTP / URL
+async def _http_status(item: str) -> Dict[str, Any]:
     r = await _url_service.check_status(item)
     return r.model_dump()
 
 
-async def _url_headers(item: str) -> Dict[str, Any]:
+async def _http_headers(item: str) -> Dict[str, Any]:
     r = await _url_service.get_headers(item)
     return r.model_dump()
 
 
-async def _domain_info(item: str) -> Dict[str, Any]:
-    r = await _domain_service.get_domain_info(item)
+# DNS — unified: IP → reverse DNS, domain → forward DNS
+async def _dns_lookup(item: str) -> Dict[str, Any]:
+    if _is_ip(item):
+        r = await _ip_service.get_dns_records(item)
+    else:
+        r = await _domain_service.get_dns_records(item)
     return r.model_dump()
 
 
-async def _domain_ssl(item: str) -> Dict[str, Any]:
+# WHOIS — unified: IP or domain
+async def _whois_lookup(item: str) -> Dict[str, Any]:
+    if _is_ip(item):
+        r = await _ip_service.get_whois(item)
+    else:
+        r = await _domain_service.get_whois(item)
+    return r.model_dump()
+
+
+# GeoIP — unified: IP or domain
+async def _geoip_lookup(item: str) -> Dict[str, Any]:
+    if _is_ip(item):
+        r = await _ip_service.get_geoip(item)
+    else:
+        r = await _domain_service.get_geoip(item)
+    return r.model_dump()
+
+
+# Reputation — unified: IP or domain
+async def _reputation_check(item: str) -> Dict[str, Any]:
+    if _is_ip(item):
+        r = await _ip_service.check_reputation(item)
+    else:
+        r = await _domain_service.check_reputation(item)
+    return r.model_dump()
+
+
+# Blacklist — unified: IP or domain
+async def _blacklist_check(item: str) -> Dict[str, Any]:
+    if _is_ip(item):
+        r = await _ip_service.check_blacklist(item)
+    else:
+        r = await _domain_service.check_blacklist(item)
+    return r.model_dump()
+
+
+# SSL — domain-specific
+async def _ssl_info(item: str) -> Dict[str, Any]:
     r = await _domain_service.check_ssl(item)
     return r.model_dump()
 
 
-async def _domain_dns(item: str) -> Dict[str, Any]:
-    r = await _domain_service.get_dns_records(item)
-    return r.model_dump()
-
-
-async def _domain_whois(item: str) -> Dict[str, Any]:
-    r = await _domain_service.get_whois(item)
-    return r.model_dump()
-
-
-async def _domain_geoip(item: str) -> Dict[str, Any]:
-    r = await _domain_service.get_geoip(item)
-    return r.model_dump()
-
-
-async def _domain_reputation(item: str) -> Dict[str, Any]:
-    r = await _domain_service.check_reputation(item)
-    return r.model_dump()
-
-
-async def _domain_blacklist(item: str) -> Dict[str, Any]:
-    r = await _domain_service.check_blacklist(item)
-    return r.model_dump()
-
-
-async def _domain_ssl_certificate(item: str) -> Dict[str, Any]:
+async def _ssl_certificate(item: str) -> Dict[str, Any]:
     r = await _domain_service.get_ssl_certificate(item)
+    return r.model_dump()
+
+
+# Domain-specific
+async def _domain_info(item: str) -> Dict[str, Any]:
+    r = await _domain_service.get_domain_info(item)
     return r.model_dump()
 
 
@@ -92,56 +130,36 @@ async def _domain_hosting(item: str) -> Dict[str, Any]:
     return r.model_dump()
 
 
+# IP-specific
 async def _ip_info(item: str) -> Dict[str, Any]:
     r = await _ip_service.get_ip_info(item)
     return r.model_dump()
 
 
-async def _ip_dns(item: str) -> Dict[str, Any]:
-    r = await _ip_service.get_dns_records(item)
-    return r.model_dump()
-
-
-async def _ip_geoip(item: str) -> Dict[str, Any]:
-    r = await _ip_service.get_geoip(item)
-    return r.model_dump()
-
-
-async def _ip_reputation(item: str) -> Dict[str, Any]:
-    r = await _ip_service.check_reputation(item)
-    return r.model_dump()
-
-
-async def _ip_blacklist(item: str) -> Dict[str, Any]:
-    r = await _ip_service.check_blacklist(item)
-    return r.model_dump()
-
-
-async def _ip_whois(item: str) -> Dict[str, Any]:
-    r = await _ip_service.get_whois(item)
-    return r.model_dump()
-
-
 # job_type -> handler
 HANDLERS: Dict[str, Callable[[str], Coroutine[Any, Any, Dict[str, Any]]]] = {
-    "url/status": _url_status,
-    "url/headers": _url_headers,
+    # HTTP
+    "http/status": _http_status,
+    "http/headers": _http_headers,
+    # DNS
+    "dns/lookup": _dns_lookup,
+    # WHOIS
+    "whois/lookup": _whois_lookup,
+    # GeoIP
+    "geoip/lookup": _geoip_lookup,
+    # Reputation
+    "reputation/check": _reputation_check,
+    # Blacklist
+    "blacklist/check": _blacklist_check,
+    # SSL
+    "ssl/info": _ssl_info,
+    "ssl/certificate": _ssl_certificate,
+    # Domain-specific
     "domain/info": _domain_info,
-    "domain/ssl": _domain_ssl,
-    "domain/dns": _domain_dns,
-    "domain/whois": _domain_whois,
-    "domain/geoip": _domain_geoip,
-    "domain/reputation": _domain_reputation,
-    "domain/blacklist": _domain_blacklist,
-    "domain/ssl-certificate": _domain_ssl_certificate,
     "domain/subdomains": _domain_subdomains,
     "domain/hosting": _domain_hosting,
+    # IP-specific
     "ip/info": _ip_info,
-    "ip/dns": _ip_dns,
-    "ip/geoip": _ip_geoip,
-    "ip/reputation": _ip_reputation,
-    "ip/blacklist": _ip_blacklist,
-    "ip/whois": _ip_whois,
 }
 
 

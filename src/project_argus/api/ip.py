@@ -1,4 +1,4 @@
-"""IP bulk API endpoints — all operations accept POST with a list of IP addresses."""
+"""IP-specific bulk API endpoints — accepts POST with a list of IP addresses."""
 
 import logging
 
@@ -41,75 +41,5 @@ async def bulk_ip_info(body: IPBulkRequest) -> JobCreatedResponse:
         job_type="ip/info",
         status="pending",
         total=len(sanitised),
-        message="Job enqueued. Poll /jobs/{job_id}/status for progress.",
-    )
-
-
-@router.post("/dns", response_model=JobCreatedResponse, status_code=202)
-async def bulk_ip_dns(body: IPBulkRequest) -> JobCreatedResponse:
-    """Fetch reverse DNS records for a list of IP addresses."""
-    sanitised = _validate_ips(body.ips)
-    job_id = await enqueue_job("ip/dns", sanitised)
-    return JobCreatedResponse(
-        job_id=job_id,
-        job_type="ip/dns",
-        status="pending",
-        total=len(sanitised),
-        message="Job enqueued. Poll /jobs/{job_id}/status for progress.",
-    )
-
-
-@router.post("/geoip", response_model=JobCreatedResponse, status_code=202)
-async def bulk_ip_geoip(body: IPBulkRequest) -> JobCreatedResponse:
-    """Fetch GeoIP data for a list of IP addresses."""
-    sanitised = _validate_ips(body.ips)
-    job_id = await enqueue_job("ip/geoip", sanitised)
-    return JobCreatedResponse(
-        job_id=job_id,
-        job_type="ip/geoip",
-        status="pending",
-        total=len(sanitised),
-        message="Job enqueued. Poll /jobs/{job_id}/status for progress.",
-    )
-
-
-@router.post("/reputation", response_model=JobCreatedResponse, status_code=202)
-async def bulk_ip_reputation(body: IPBulkRequest) -> JobCreatedResponse:
-    """Check reputation for a list of IP addresses."""
-    sanitised = _validate_ips(body.ips)
-    job_id = await enqueue_job("ip/reputation", sanitised)
-    return JobCreatedResponse(
-        job_id=job_id,
-        job_type="ip/reputation",
-        status="pending",
-        total=len(sanitised),
-        message="Job enqueued. Poll /jobs/{job_id}/status for progress.",
-    )
-
-
-@router.post("/blacklist", response_model=JobCreatedResponse, status_code=202)
-async def bulk_ip_blacklist(body: IPBulkRequest) -> JobCreatedResponse:
-    """Check blacklist status for a list of IP addresses."""
-    sanitised = _validate_ips(body.ips)
-    job_id = await enqueue_job("ip/blacklist", sanitised)
-    return JobCreatedResponse(
-        job_id=job_id,
-        job_type="ip/blacklist",
-        status="pending",
-        total=len(sanitised),
-        message="Job enqueued. Poll /jobs/{job_id}/status for progress.",
-    )
-
-
-@router.post("/whois", response_model=JobCreatedResponse, status_code=202)
-async def bulk_ip_whois(body: IPBulkRequest) -> JobCreatedResponse:
-    """Fetch WHOIS records for a list of IP addresses."""
-    sanitised = _validate_ips(body.ips)
-    job_id = await enqueue_job("ip/whois", sanitised)
-    return JobCreatedResponse(
-        job_id=job_id,
-        job_type="ip/whois",
-        status="pending",
-        total=len(sanitised),
-        message="Job enqueued. Poll /jobs/{job_id}/status for progress.",
+        message="Job enqueued. Poll /api/jobs/{job_id} for progress.",
     )

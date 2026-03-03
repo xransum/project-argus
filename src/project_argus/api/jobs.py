@@ -14,7 +14,7 @@ router = APIRouter(tags=["Jobs"])
 PAGE_SIZE = 100
 
 
-@router.get("/{job_id}/status", response_model=JobStatusResponse)
+@router.get("/{job_id}", response_model=JobStatusResponse)
 async def get_job_status(job_id: str) -> JobStatusResponse:
     """Return current status and progress counters for a job."""
     async with get_db() as conn:

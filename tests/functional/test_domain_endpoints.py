@@ -18,64 +18,6 @@ class TestDomainEndpoints:
         assert data["status"] == "pending"
         assert data["total"] == 1
 
-    def test_domain_ssl_endpoint(self, client: TestClient, sample_domain: str) -> None:
-        """Test domain SSL endpoint returns a job"""
-        response = client.post("/api/domain/ssl", json={"domains": [sample_domain]})
-        assert response.status_code == 202
-        data = response.json()
-        assert "job_id" in data
-        assert data["job_type"] == "domain/ssl"
-        assert data["total"] == 1
-
-    def test_domain_dns_endpoint(self, client: TestClient, sample_domain: str) -> None:
-        """Test domain DNS endpoint returns a job"""
-        response = client.post("/api/domain/dns", json={"domains": [sample_domain]})
-        assert response.status_code == 202
-        data = response.json()
-        assert "job_id" in data
-        assert data["job_type"] == "domain/dns"
-        assert data["total"] == 1
-
-    def test_domain_whois_endpoint(self, client: TestClient, sample_domain: str) -> None:
-        """Test domain WHOIS endpoint returns a job"""
-        response = client.post("/api/domain/whois", json={"domains": [sample_domain]})
-        assert response.status_code == 202
-        data = response.json()
-        assert "job_id" in data
-        assert data["job_type"] == "domain/whois"
-
-    def test_domain_geoip_endpoint(self, client: TestClient, sample_domain: str) -> None:
-        """Test domain GeoIP endpoint returns a job"""
-        response = client.post("/api/domain/geoip", json={"domains": [sample_domain]})
-        assert response.status_code == 202
-        data = response.json()
-        assert "job_id" in data
-        assert data["job_type"] == "domain/geoip"
-
-    def test_domain_reputation_endpoint(self, client: TestClient, sample_domain: str) -> None:
-        """Test domain reputation endpoint returns a job"""
-        response = client.post("/api/domain/reputation", json={"domains": [sample_domain]})
-        assert response.status_code == 202
-        data = response.json()
-        assert "job_id" in data
-        assert data["job_type"] == "domain/reputation"
-
-    def test_domain_blacklist_endpoint(self, client: TestClient, sample_domain: str) -> None:
-        """Test domain blacklist endpoint returns a job"""
-        response = client.post("/api/domain/blacklist", json={"domains": [sample_domain]})
-        assert response.status_code == 202
-        data = response.json()
-        assert "job_id" in data
-        assert data["job_type"] == "domain/blacklist"
-
-    def test_domain_ssl_certificate_endpoint(self, client: TestClient, sample_domain: str) -> None:
-        """Test domain SSL certificate endpoint returns a job"""
-        response = client.post("/api/domain/ssl-certificate", json={"domains": [sample_domain]})
-        assert response.status_code == 202
-        data = response.json()
-        assert "job_id" in data
-        assert data["job_type"] == "domain/ssl-certificate"
-
     def test_domain_subdomains_endpoint(self, client: TestClient, sample_domain: str) -> None:
         """Test domain subdomains endpoint returns a job"""
         response = client.post("/api/domain/subdomains", json={"domains": [sample_domain]})
