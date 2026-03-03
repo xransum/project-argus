@@ -11,7 +11,7 @@ from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from .api import blacklist, dns, domain, geoip, http, ip, jobs, reputation, ssl, whois
+from .api import blacklist, dns, domain, geoip, http, ip, jobs, proxy, reputation, ssl, whois
 from .db import init_db
 
 logger = logging.getLogger(__name__)
@@ -72,6 +72,9 @@ app.include_router(domain.router, prefix="/api/domain")
 
 # IP-specific
 app.include_router(ip.router, prefix="/api/ip")
+
+# Proxy checker
+app.include_router(proxy.router, prefix="/api/proxy")
 
 # Job management
 app.include_router(jobs.router, prefix="/api/jobs")
@@ -210,6 +213,15 @@ _ENDPOINTS = {
                 "1.1.1.1\n8.8.8.8",
             ),
         },
+        "Proxy": {
+            "check": _ep(
+                "/api/proxy/check",
+                "Proxy Check",
+                "Test whether each proxy is reachable via HTTP, HTTPS, SOCKS4, and SOCKS5.",
+                "proxies",
+                '{"ip": "1.2.3.4", "port": 8080}',
+            ),
+        },
     }
 }
 
@@ -241,6 +253,7 @@ async def api_root() -> Dict[str, Any]:
                 "/api/domain/hosting",
             ],
             "ip": ["/api/ip/info"],
+            "proxy": ["/api/proxy/check"],
         },
         "jobs": {
             "status": "/api/jobs/{job_id}",

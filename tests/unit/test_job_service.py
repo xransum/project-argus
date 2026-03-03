@@ -77,6 +77,7 @@ class TestHandlersRegistry:
             "domain/subdomains",
             "domain/hosting",
             "ip/info",
+            "proxy/check",
         }
         assert set(HANDLERS.keys()) == expected
 

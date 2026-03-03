@@ -31,6 +31,7 @@ from ..models.ip_models import (
 )
 from ..services.domain_service import DomainService
 from ..services.ip_service import IPService
+from ..services.proxy_service import ProxyService
 from ..services.url_service import URLService
 
 logger = logging.getLogger(__name__)
@@ -38,6 +39,7 @@ logger = logging.getLogger(__name__)
 _url_service = URLService()
 _domain_service = DomainService()
 _ip_service = IPService()
+_proxy_service = ProxyService()
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -155,6 +157,13 @@ async def _ip_info(item: str) -> Dict[str, Any]:
     return r.model_dump()
 
 
+# Proxy — item is encoded as "ip:port"
+async def _proxy_check(item: str) -> Dict[str, Any]:
+    ip, port_str = item.rsplit(":", 1)
+    r = await _proxy_service.check(ip, int(port_str))
+    return r.model_dump()
+
+
 # job_type -> handler
 HANDLERS: Dict[str, Callable[[str], Coroutine[Any, Any, Dict[str, Any]]]] = {
     # HTTP
@@ -179,6 +188,8 @@ HANDLERS: Dict[str, Callable[[str], Coroutine[Any, Any, Dict[str, Any]]]] = {
     "domain/hosting": _domain_hosting,
     # IP-specific
     "ip/info": _ip_info,
+    # Proxy
+    "proxy/check": _proxy_check,
 }
 
 

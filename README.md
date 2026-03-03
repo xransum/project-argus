@@ -29,6 +29,12 @@ A bulk intelligence-gathering API for analyzing URLs, domains, and IP addresses.
 - **Blacklist Check**: DNSBL and threat feed status
 - **WHOIS Lookup**: Network registration data
 
+### Proxy Checking
+- **Protocol Probing**: Tests each proxy against HTTP, HTTPS, SOCKS4, and SOCKS5 concurrently
+- **Open/Closed Status**: Reports whether any protocol succeeded (`is_open`)
+- **Per-Protocol Timing**: Response time in milliseconds for each working protocol
+- **Private IP Rejection**: Loopback and RFC-1918 addresses are blocked at the API layer
+
 ### Async Job System
 All bulk endpoints enqueue a job and return immediately. Clients poll for status and paginated results.
 
@@ -128,6 +134,14 @@ POST /api/ip/blacklist    { "ips": [...] }
 POST /api/ip/whois        { "ips": [...] }
 ```
 
+### Proxy
+
+```
+POST /api/proxy/check     { "proxies": [{"ip": "1.2.3.4", "port": 8080}, ...] }
+```
+
+Each result entry reports per-protocol status for HTTP, HTTPS, SOCKS4, and SOCKS5.
+
 ### Jobs
 
 ```
@@ -153,6 +167,11 @@ GET /health   # Health check
 curl -s -X POST http://localhost:8000/api/http/status \
   -H "Content-Type: application/json" \
   -d '{"urls": ["https://example.com", "https://google.com"]}'
+
+# Submit a proxy check job
+curl -s -X POST http://localhost:8000/api/proxy/check \
+  -H "Content-Type: application/json" \
+  -d '{"proxies": [{"ip": "203.0.113.1", "port": 8080}]}'
 
 # Poll for results (replace <job_id>)
 curl -s http://localhost:8000/jobs/<job_id>/status
@@ -210,6 +229,26 @@ asyncio.run(main())
 
 `redirect_type` values: `"http"` (3xx), `"meta-refresh"` (`<meta http-equiv="refresh">`), `"js-location"` (`window.location` / `location.href`).
 
+## Proxy Check Response
+
+`/api/proxy/check` results report per-protocol status for each `{ip, port}` pair:
+
+```json
+{
+  "ip": "203.0.113.1",
+  "port": 8080,
+  "is_open": true,
+  "protocols": [
+    { "protocol": "http",   "working": true,  "response_time_ms": 312.4, "error": null },
+    { "protocol": "https",  "working": true,  "response_time_ms": 418.1, "error": null },
+    { "protocol": "socks4", "working": false, "response_time_ms": null,  "error": "Connect timeout" },
+    { "protocol": "socks5", "working": false, "response_time_ms": null,  "error": "Connect timeout" }
+  ]
+}
+```
+
+`is_open` is `true` if at least one protocol succeeded.
+
 ## Testing
 
 ```bash
@@ -233,6 +272,7 @@ tests/
 │   ├── test_domain_service.py
 │   ├── test_ip_service.py
 │   ├── test_job_service.py
+│   ├── test_proxy_service.py
 │   ├── test_url_service.py
 │   └── utils/
 │       ├── test_http.py
@@ -242,6 +282,7 @@ tests/
 │   ├── test_url_endpoints.py        # POST /api/http/*
 │   ├── test_domain_endpoints.py     # POST /api/domain/*
 │   ├── test_ip_endpoints.py         # POST /api/ip/*
+│   ├── test_proxy_endpoints.py      # POST /api/proxy/*
 │   ├── test_jobs_endpoints.py       # GET /jobs/*
 │   ├── test_blacklist_endpoints.py
 │   ├── test_geoip_endpoints.py
@@ -267,6 +308,7 @@ project-argus/
 │   │   ├── http.py                       # POST /api/http/* (status, headers)
 │   │   ├── domain.py                     # POST /api/domain/*
 │   │   ├── ip.py                         # POST /api/ip/*
+│   │   ├── proxy.py                      # POST /api/proxy/check
 │   │   ├── blacklist.py                  # POST /api/blacklist/*
 │   │   ├── dns.py                        # POST /api/dns/*
 │   │   ├── geoip.py                      # POST /api/geoip/*
@@ -276,11 +318,13 @@ project-argus/
 │   │   └── jobs.py                       # GET /jobs/*
 │   ├── models/
 │   │   ├── url_models.py                 # URLStatusResponse, RedirectHop
+│   │   ├── proxy_models.py               # ProxyTarget, ProxyBulkRequest, ProxyCheckResponse
 │   │   └── job_models.py                 # JobCreatedResponse, JobStatusResponse
 │   ├── services/
 │   │   ├── url_service.py                # redirect chain + client-side detection
 │   │   ├── domain_service.py
 │   │   ├── ip_service.py
+│   │   ├── proxy_service.py              # concurrent HTTP/HTTPS/SOCKS4/SOCKS5 probing
 │   │   └── job_service.py                # async job queue + HANDLERS dispatch
 │   ├── utils/
 │   │   ├── http.py                       # user-agent pool, DEFAULT_REQUEST_HEADERS, extract_client_redirect()
