@@ -5,7 +5,7 @@ import ipaddress
 import logging
 import uuid
 from datetime import datetime, timezone
-from typing import Any, Callable, Coroutine, Dict, List
+from typing import Any, Callable, Coroutine, Dict, List, Union
 
 from ..db import (
     create_job,
@@ -14,6 +14,20 @@ from ..db import (
     set_result_done,
     set_result_error,
     set_result_running,
+)
+from ..models.domain_models import (
+    BlacklistResponse,
+    DNSRecordResponse,
+    GeoIPResponse,
+    ReputationResponse,
+    WHOISResponse,
+)
+from ..models.ip_models import (
+    IPBlacklistResponse,
+    IPDNSResponse,
+    IPGeoResponse,
+    IPReputationResponse,
+    IPWHOISResponse,
 )
 from ..services.domain_service import DomainService
 from ..services.ip_service import IPService
@@ -60,6 +74,7 @@ async def _http_headers(item: str) -> Dict[str, Any]:
 
 # DNS — unified: IP → reverse DNS, domain → forward DNS
 async def _dns_lookup(item: str) -> Dict[str, Any]:
+    r: Union[IPDNSResponse, DNSRecordResponse]
     if _is_ip(item):
         r = await _ip_service.get_dns_records(item)
     else:
@@ -69,6 +84,7 @@ async def _dns_lookup(item: str) -> Dict[str, Any]:
 
 # WHOIS — unified: IP or domain
 async def _whois_lookup(item: str) -> Dict[str, Any]:
+    r: Union[IPWHOISResponse, WHOISResponse]
     if _is_ip(item):
         r = await _ip_service.get_whois(item)
     else:
@@ -78,6 +94,7 @@ async def _whois_lookup(item: str) -> Dict[str, Any]:
 
 # GeoIP — unified: IP or domain
 async def _geoip_lookup(item: str) -> Dict[str, Any]:
+    r: Union[IPGeoResponse, GeoIPResponse]
     if _is_ip(item):
         r = await _ip_service.get_geoip(item)
     else:
@@ -87,6 +104,7 @@ async def _geoip_lookup(item: str) -> Dict[str, Any]:
 
 # Reputation — unified: IP or domain
 async def _reputation_check(item: str) -> Dict[str, Any]:
+    r: Union[IPReputationResponse, ReputationResponse]
     if _is_ip(item):
         r = await _ip_service.check_reputation(item)
     else:
@@ -96,6 +114,7 @@ async def _reputation_check(item: str) -> Dict[str, Any]:
 
 # Blacklist — unified: IP or domain
 async def _blacklist_check(item: str) -> Dict[str, Any]:
+    r: Union[IPBlacklistResponse, BlacklistResponse]
     if _is_ip(item):
         r = await _ip_service.check_blacklist(item)
     else:

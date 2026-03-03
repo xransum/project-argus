@@ -7,7 +7,11 @@ from typing import Optional, Tuple
 
 from bs4 import BeautifulSoup
 
-NOW = datetime.utcnow()
+
+def _gecko_date() -> str:
+    """Return today's date formatted as YYYYMMDD for use in Gecko user-agent strings."""
+    return datetime.utcnow().strftime("%Y%m%d")
+
 
 USER_AGENT_LIST = [
     (
@@ -18,12 +22,10 @@ USER_AGENT_LIST = [
         "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_5) AppleWebKit/605.1.15 (KHTML,"
         " like Gecko) Version/13.1.1 Safari/605.1.15"
     ),
-    f"Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:77.0) Gecko/{NOW.strftime('%Y%m%d')} Firefox/77.0",
     (
         "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_5) AppleWebKit/537.36 (KHTML,"
         " like Gecko) Chrome/83.0.4103.97 Safari/537.36"
     ),
-    f"Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:77.0) Gecko/{NOW.strftime('%Y%m%d')} Firefox/77.0",
     (
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like"
         " Gecko) Chrome/83.0.4103.97 Safari/537.36"
@@ -31,9 +33,18 @@ USER_AGENT_LIST = [
 ]
 
 
+def _build_user_agent_list() -> list[str]:
+    """Build the full user agent list including dynamic Gecko date entries."""
+    gecko = _gecko_date()
+    return USER_AGENT_LIST + [
+        f"Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:77.0) Gecko/{gecko} Firefox/77.0",
+        f"Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:77.0) Gecko/{gecko} Firefox/77.0",
+    ]
+
+
 def random_ua() -> str:
     """Return a random user agent string from the pool."""
-    return random.choice(USER_AGENT_LIST)
+    return random.choice(_build_user_agent_list())
 
 
 DEFAULT_USER_AGENT = random_ua()

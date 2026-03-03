@@ -44,18 +44,6 @@ def valid_urls():
 
 
 @pytest.fixture
-def invalid_urls():
-    """Fixture providing invalid URL test cases"""
-    return [
-        "",
-        "not-a-url",
-        "http://localhost",
-        "http://127.0.0.1",
-        "http://192.168.1.1",
-    ]
-
-
-@pytest.fixture
 def valid_domains():
     """Fixture providing valid domain test cases"""
     return [
@@ -66,33 +54,10 @@ def valid_domains():
 
 
 @pytest.fixture
-def invalid_domains():
-    """Fixture providing invalid domain test cases"""
-    return [
-        "",
-        "localhost",
-        "domain.local",
-        "192.168.1.1",
-        "-invalid.com",
-    ]
-
-
-@pytest.fixture
 def valid_ips():
     """Fixture providing valid IP test cases"""
     return [
         "8.8.8.8",
         "1.1.1.1",
         "2606:4700:4700::1111",
-    ]
-
-
-@pytest.fixture
-def invalid_ips():
-    """Fixture providing invalid IP test cases"""
-    return [
-        "",
-        "192.168.1.1",  # Private
-        "127.0.0.1",  # Loopback
-        "999.999.999.999",  # Invalid format
     ]

@@ -5,9 +5,7 @@ import re
 from urllib.parse import unquote, urlparse
 
 import idna
-from fastapi import Query
 from pydantic import BaseModel, ValidationError, field_validator
-from typing_extensions import Annotated
 
 
 class URLValidator(BaseModel):
@@ -333,13 +331,6 @@ class TargetValidator(BaseModel):
             ) from exc
 
 
-# Type aliases for FastAPI endpoints
-ValidatedURL = Annotated[str, Query(..., description="URL to validate")]
-ValidatedDomain = Annotated[str, Query(..., description="Domain to validate")]
-ValidatedIP = Annotated[str, Query(..., description="IP address to validate")]
-ValidatedTarget = Annotated[str, Query(..., description="Domain or IP address to validate")]
-
-
 def validate_url(url: str) -> str:
     """Validate and sanitize URL"""
     return URLValidator(url=url).url
@@ -353,8 +344,3 @@ def validate_domain(domain: str) -> str:
 def validate_ip(ip: str) -> str:
     """Validate and sanitize IP address"""
     return IPValidator(ip=ip).ip
-
-
-def validate_target(target: str) -> str:
-    """Validate and sanitize a domain or IP address target"""
-    return TargetValidator(target=target).target

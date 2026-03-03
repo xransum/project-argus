@@ -5,7 +5,7 @@ from bs4 import BeautifulSoup
 from project_argus.utils.http import (
     DEFAULT_REQUEST_HEADERS,
     DEFAULT_USER_AGENT,
-    USER_AGENT_LIST,
+    _build_user_agent_list,
     _extract_js_location,
     _extract_meta_refresh,
     extract_client_redirect,
@@ -24,10 +24,10 @@ class TestRandomUA:
 
     def test_returns_value_from_list(self):
         ua = random_ua()
-        assert ua in USER_AGENT_LIST
+        assert ua in _build_user_agent_list()
 
     def test_default_user_agent_in_list(self):
-        assert DEFAULT_USER_AGENT in USER_AGENT_LIST
+        assert DEFAULT_USER_AGENT in _build_user_agent_list()
 
     def test_default_request_headers_has_user_agent(self):
         assert "User-Agent" in DEFAULT_REQUEST_HEADERS

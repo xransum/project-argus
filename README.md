@@ -36,7 +36,7 @@ All bulk endpoints enqueue a job and return immediately. Clients poll for status
 
 ### Prerequisites
 
-- Python 3.8+
+- Python 3.11+
 - Node.js + npm (for frontend vendor assets)
 - [uv](https://github.com/astral-sh/uv) package manager
 
@@ -95,11 +95,11 @@ The app will be available at:
 
 All bulk endpoints accept **POST** with a JSON body. Responses are job references — poll `/jobs/{job_id}/status` and `/jobs/{job_id}/results` for output.
 
-### URL
+### HTTP
 
 ```
-POST /api/url/status       { "urls": ["https://example.com", ...] }
-POST /api/url/headers      { "urls": ["https://example.com", ...] }
+POST /api/http/status      { "urls": ["https://example.com", ...] }
+POST /api/http/headers     { "urls": ["https://example.com", ...] }
 ```
 
 ### Domain
@@ -150,7 +150,7 @@ GET /health   # Health check
 
 ```bash
 # Submit a bulk URL status job
-curl -s -X POST http://localhost:8000/api/url/status \
+curl -s -X POST http://localhost:8000/api/http/status \
   -H "Content-Type: application/json" \
   -d '{"urls": ["https://example.com", "https://google.com"]}'
 
@@ -169,7 +169,7 @@ async def main():
     async with httpx.AsyncClient() as client:
         # Submit job
         r = await client.post(
-            "http://localhost:8000/api/url/status",
+            "http://localhost:8000/api/http/status",
             json={"urls": ["https://example.com"]},
         )
         job_id = r.json()["job_id"]
@@ -227,15 +227,29 @@ uv run pytest tests/unit/test_url_service.py -v
 
 ```
 tests/
+├── conftest.py
 ├── unit/
-│   ├── test_url_service.py     # redirect chain, loop/limit detection
+│   ├── test_db.py
 │   ├── test_domain_service.py
+│   ├── test_ip_service.py
+│   ├── test_job_service.py
+│   ├── test_url_service.py
 │   └── utils/
+│       ├── test_http.py
 │       └── test_validators.py
-└── functional/
-    ├── test_url_endpoints.py
-    ├── test_domain_endpoints.py
-    └── test_ip_endpoints.py
+├── functional/
+│   ├── test_main.py
+│   ├── test_url_endpoints.py        # POST /api/http/*
+│   ├── test_domain_endpoints.py     # POST /api/domain/*
+│   ├── test_ip_endpoints.py         # POST /api/ip/*
+│   ├── test_jobs_endpoints.py       # GET /jobs/*
+│   ├── test_blacklist_endpoints.py
+│   ├── test_geoip_endpoints.py
+│   ├── test_reputation_endpoints.py
+│   ├── test_ssl_endpoints.py
+│   └── test_whois_endpoints.py
+└── integration/
+    └── test_api_integration.py
 ```
 
 ## Project Structure
@@ -250,9 +264,15 @@ project-argus/
 │   └── test.sh                           # pytest runner
 ├── src/project_argus/
 │   ├── api/
-│   │   ├── url.py                        # POST /api/url/*
+│   │   ├── http.py                       # POST /api/http/* (status, headers)
 │   │   ├── domain.py                     # POST /api/domain/*
 │   │   ├── ip.py                         # POST /api/ip/*
+│   │   ├── blacklist.py                  # POST /api/blacklist/*
+│   │   ├── dns.py                        # POST /api/dns/*
+│   │   ├── geoip.py                      # POST /api/geoip/*
+│   │   ├── reputation.py                 # POST /api/reputation/*
+│   │   ├── ssl.py                        # POST /api/ssl/*
+│   │   ├── whois.py                      # POST /api/whois/*
 │   │   └── jobs.py                       # GET /jobs/*
 │   ├── models/
 │   │   ├── url_models.py                 # URLStatusResponse, RedirectHop
@@ -263,8 +283,8 @@ project-argus/
 │   │   ├── ip_service.py
 │   │   └── job_service.py                # async job queue + HANDLERS dispatch
 │   ├── utils/
-│   │   ├── http.py                       # USER_AGENT_LIST, DEFAULT_REQUEST_HEADERS, extract_client_redirect()
-│   │   └── validators.py
+│   │   ├── http.py                       # user-agent pool, DEFAULT_REQUEST_HEADERS, extract_client_redirect()
+│   │   └── validators.py                 # validate_url(), validate_domain(), validate_ip()
 │   ├── static/
 │   │   └── js/app.js                     # dashboard JS (dropdown, auto-poll, syntax highlight)
 │   ├── templates/
