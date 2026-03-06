@@ -1,5 +1,6 @@
 """Unit tests for services/proxy_service.py"""
 
+import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -8,6 +9,7 @@ from project_argus.models.proxy_models import ProxyCheckResponse, ProxyProtocolR
 from project_argus.services.proxy_service import (
     ProxyService,
     _check_protocol,
+    _normalize_error,
     _parse_egress_ip,
     _proxy_url,
 )
@@ -55,6 +57,32 @@ class TestParseEgressIp:
     def test_missing_origin_key_raises(self):
         with pytest.raises(KeyError):
             _parse_egress_ip({})
+
+
+class TestNormalizeError:
+    def test_all_connection_attempts_failed(self):
+        assert _normalize_error(Exception("All connection attempts failed")) == "connection failed"
+
+    def test_all_connection_attempts_failed_with_prefix(self):
+        # httpcore may include extra context before the message
+        assert (
+            _normalize_error(Exception("foo: All connection attempts failed"))
+            == "connection failed"
+        )
+
+    def test_socks4_bytes_arg(self):
+        assert _normalize_error(Exception(b"socks4")) == "not a SOCKS proxy"
+
+    def test_socks5_bytes_arg(self):
+        assert _normalize_error(Exception(b"socks5")) == "not a SOCKS proxy"
+
+    def test_timeout_exception(self):
+        import httpx
+
+        assert _normalize_error(httpx.TimeoutException("timed out")) == "timed out"
+
+    def test_unknown_error_passes_through(self):
+        assert _normalize_error(Exception("something unexpected")) == "something unexpected"
 
 
 class TestCheckProtocol:
@@ -204,7 +232,7 @@ class TestCheckProtocol:
         mock_client = AsyncMock()
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
         mock_client.__aexit__ = AsyncMock(return_value=False)
-        mock_client.get = AsyncMock(side_effect=Exception("Connection refused"))
+        mock_client.get = AsyncMock(side_effect=Exception("All connection attempts failed"))
 
         with patch(
             "project_argus.services.proxy_service.httpx.AsyncClient", return_value=mock_client
@@ -213,7 +241,7 @@ class TestCheckProtocol:
 
         assert result.working is False
         assert result.protocol == "http"
-        assert "Connection refused" in (result.error or "")
+        assert result.error == "connection failed"
 
     @pytest.mark.asyncio
     async def test_timeout_returns_not_working(self):
@@ -231,6 +259,7 @@ class TestCheckProtocol:
 
         assert result.working is False
         assert result.protocol == "socks5"
+        assert result.error == "timed out"
 
     @pytest.mark.asyncio
     async def test_socks_error_returns_not_working(self):
@@ -246,6 +275,7 @@ class TestCheckProtocol:
 
         assert result.working is False
         assert result.protocol == "socks4"
+        assert result.error == "not a SOCKS proxy"
 
     # ------------------------------------------------------------------
     # All protocols are exercised
@@ -318,3 +348,25 @@ class TestProxyService:
 
         proto_names = {r.protocol for r in result.protocols}
         assert proto_names == {"http", "https", "socks4", "socks5"}
+
+    @pytest.mark.asyncio
+    async def test_probe_ceiling_fires_on_stall(self):
+        """If _check_protocol stalls beyond _PROBE_CEILING, the probe returns
+        working=False with error='timed out' rather than hanging forever."""
+
+        async def stall(proto, ip, port):  # type: ignore[no-untyped-def]
+            # Sleep far longer than the patched ceiling to simulate a stall.
+            await asyncio.sleep(9999)
+            return ProxyProtocolResult(protocol=proto, working=True)
+
+        service = ProxyService()
+        # Patch _PROBE_CEILING to a tiny value so the test runs instantly.
+        with patch("project_argus.services.proxy_service._PROBE_CEILING", 0.05):
+            with patch("project_argus.services.proxy_service._check_protocol", side_effect=stall):
+                result = await service.check("1.2.3.4", 8080)
+
+        # All four probes should have hit the ceiling and returned not-working.
+        assert result.is_open is False
+        for r in result.protocols:
+            assert r.working is False
+            assert r.error == "timed out"

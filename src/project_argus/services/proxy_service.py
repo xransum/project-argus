@@ -19,15 +19,20 @@ from ..models.proxy_models import (
 logger = logging.getLogger(__name__)
 
 # IP-echo endpoint: returns {"origin": "<egress-ip>"}.
-# A proxy is confirmed open when the reported egress IP matches the proxy IP.
 _PROBE_URL = "http://httpbin.org/ip"
 
 # User-agent sent with every probe request.
 _USER_AGENT = "Mozilla/5.0 (compatible; project-argus/1.0)"
 
-# Timeouts matching curl's --connect-timeout 8 / --max-time 20.
+# Connect timeout for HTTP/HTTPS proxies.
 _CONNECT_TIMEOUT = 8.0
-_READ_TIMEOUT = 20.0
+# Connect timeout for SOCKS proxies - slightly longer as negotiation is slower.
+_SOCKS_CONNECT_TIMEOUT = 10.0
+# Read timeout applied to all protocols - httpbin responds well under 10s.
+_READ_TIMEOUT = 10.0
+# Hard ceiling per probe: socks connect + read + a small buffer.  asyncio.wait_for
+# enforces this regardless of whether the httpx/httpcore timeout chain fires.
+_PROBE_CEILING = _SOCKS_CONNECT_TIMEOUT + _READ_TIMEOUT + 2.0
 
 # SSL context that skips certificate verification, equivalent to curl's
 # --insecure / --proxy-insecure flags.
@@ -39,6 +44,24 @@ _SSL_CONTEXT.verify_mode = ssl.CERT_NONE
 def _proxy_url(protocol: ProxyProtocol, ip: str, port: int) -> str:
     """Build the proxy URL string."""
     return f"{protocol}://{ip}:{port}"
+
+
+def _normalize_error(exc: Exception) -> str:
+    """Return a clean, human-readable error string for a probe exception.
+
+    Normalizes the raw httpcore / socksio messages that would otherwise
+    leak opaque internal details into the result payload.
+    """
+    if isinstance(exc, httpx.TimeoutException):
+        return "timed out"
+    msg = str(exc)
+    if "All connection attempts failed" in msg:
+        return "connection failed"
+    # socksio raises exceptions whose first arg is raw bytes when the remote
+    # host is not actually a SOCKS proxy (e.g. b'socks4', b'socks5').
+    if exc.args and isinstance(exc.args[0], bytes):
+        return "not a SOCKS proxy"
+    return msg
 
 
 def _parse_egress_ip(body: dict) -> str:
@@ -99,7 +122,8 @@ async def _check_protocol(
             ssl_context=_SSL_CONTEXT,
         )
 
-    timeout = httpx.Timeout(connect=_CONNECT_TIMEOUT, read=_READ_TIMEOUT, write=5.0, pool=5.0)
+    connect_t = _SOCKS_CONNECT_TIMEOUT if protocol in ("socks4", "socks5") else _CONNECT_TIMEOUT
+    timeout = httpx.Timeout(connect=connect_t, read=_READ_TIMEOUT, write=5.0, pool=5.0)
 
     start = time.perf_counter()
     try:
@@ -153,11 +177,13 @@ async def _check_protocol(
         )
 
     except Exception as exc:
-        logger.debug("proxy=%s:%s protocol=%s failed: %s", ip, port, protocol, exc)
+        logger.debug(
+            "proxy=%s:%s protocol=%s failed: %s", ip, port, protocol, _normalize_error(exc)
+        )
         return ProxyProtocolResult(
             protocol=protocol,
             working=False,
-            error=str(exc),
+            error=_normalize_error(exc),
         )
 
 
@@ -165,9 +191,31 @@ class ProxyService:
     """Check whether a proxy is reachable via HTTP, HTTPS, SOCKS4, and SOCKS5."""
 
     async def check(self, ip: str, port: int) -> ProxyCheckResponse:
-        """Run all four protocol probes against *ip*:*port* concurrently."""
+        """Run all four protocol probes against *ip*:*port* concurrently.
+
+        Each probe is wrapped in asyncio.wait_for(_PROBE_CEILING) as a hard
+        ceiling so the gather always completes even if the httpx/httpcore
+        timeout chain fails to fire (e.g. a kernel-level stall).
+        """
+
+        async def _probe(proto: ProxyProtocol) -> ProxyProtocolResult:
+            try:
+                return await asyncio.wait_for(
+                    _check_protocol(proto, ip, port),
+                    timeout=_PROBE_CEILING,
+                )
+            except asyncio.TimeoutError:
+                logger.debug(
+                    "proxy=%s:%s protocol=%s ceiling hit (%.0fs)",
+                    ip,
+                    port,
+                    proto,
+                    _PROBE_CEILING,
+                )
+                return ProxyProtocolResult(protocol=proto, working=False, error="timed out")
+
         results: List[ProxyProtocolResult] = await asyncio.gather(
-            *[_check_protocol(proto, ip, port) for proto in PROXY_PROTOCOLS]
+            *[_probe(proto) for proto in PROXY_PROTOCOLS]
         )
 
         logger.debug(
