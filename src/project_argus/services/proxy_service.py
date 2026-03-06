@@ -28,8 +28,8 @@ _USER_AGENT = "Mozilla/5.0 (compatible; project-argus/1.0)"
 _CONNECT_TIMEOUT = 8.0
 # Connect timeout for SOCKS proxies - slightly longer as negotiation is slower.
 _SOCKS_CONNECT_TIMEOUT = 10.0
-# Read timeout applied to all protocols - httpbin responds well under 10s.
-_READ_TIMEOUT = 10.0
+# Read timeout applied to all protocols - matches curl's --max-time 20.
+_READ_TIMEOUT = 20.0
 # Hard ceiling per probe: socks connect + read + a small buffer.  asyncio.wait_for
 # enforces this regardless of whether the httpx/httpcore timeout chain fires.
 _PROBE_CEILING = _SOCKS_CONNECT_TIMEOUT + _READ_TIMEOUT + 2.0
