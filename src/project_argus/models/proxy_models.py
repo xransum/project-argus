@@ -24,7 +24,9 @@ class ProxyBulkRequest(BaseModel):
             try:
                 port = int(port_str)
             except ValueError:
-                raise ValueError(f"invalid port in {entry!r}: {port_str!r} is not an integer")
+                raise ValueError(
+                    f"invalid port in {entry!r}: {port_str!r} is not an integer"
+                ) from None
             if not (1 <= port <= 65535):
                 raise ValueError(f"invalid port in {entry!r}: {port} is out of range 1-65535")
         return values

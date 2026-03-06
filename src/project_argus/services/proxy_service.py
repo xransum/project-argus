@@ -103,21 +103,21 @@ async def _check_protocol(
     # proxy's certificate doesn't match its IP.
     transport = httpx.AsyncHTTPTransport(verify=_SSL_CONTEXT)
     if protocol in ("socks4", "socks5"):
-        transport._pool = httpcore.AsyncSOCKSProxy(  # type: ignore[attr-defined]
+        transport._pool = httpcore.AsyncSOCKSProxy(
             proxy_url,
             ssl_context=_SSL_CONTEXT,
         )
     elif protocol == "https":
         # proxy_ssl_context disables cert verification on the proxy tunnel
         # handshake itself (the TLS connection TO the proxy on port 443).
-        # Only valid for https:// proxy URLs — httpcore rejects it for http://.
-        transport._pool = httpcore.AsyncHTTPProxy(  # type: ignore[attr-defined]
+        # Only valid for https:// proxy URLs - httpcore rejects it for http://.
+        transport._pool = httpcore.AsyncHTTPProxy(
             proxy_url,
             ssl_context=_SSL_CONTEXT,
             proxy_ssl_context=_SSL_CONTEXT,
         )
     else:
-        transport._pool = httpcore.AsyncHTTPProxy(  # type: ignore[attr-defined]
+        transport._pool = httpcore.AsyncHTTPProxy(
             proxy_url,
             ssl_context=_SSL_CONTEXT,
         )
