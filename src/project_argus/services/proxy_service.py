@@ -60,7 +60,7 @@ def _normalize_error(exc: Exception) -> str:
     # socksio raises exceptions whose first arg is raw bytes when the remote
     # host is not actually a SOCKS proxy (e.g. b'socks4', b'socks5').
     if exc.args and isinstance(exc.args[0], bytes):
-        return "not a SOCKS proxy"
+        return "connection failed"
     return msg
 
 

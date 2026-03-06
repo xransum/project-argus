@@ -71,10 +71,10 @@ class TestNormalizeError:
         )
 
     def test_socks4_bytes_arg(self):
-        assert _normalize_error(Exception(b"socks4")) == "not a SOCKS proxy"
+        assert _normalize_error(Exception(b"socks4")) == "connection failed"
 
     def test_socks5_bytes_arg(self):
-        assert _normalize_error(Exception(b"socks5")) == "not a SOCKS proxy"
+        assert _normalize_error(Exception(b"socks5")) == "connection failed"
 
     def test_timeout_exception(self):
         import httpx
@@ -275,7 +275,7 @@ class TestCheckProtocol:
 
         assert result.working is False
         assert result.protocol == "socks4"
-        assert result.error == "not a SOCKS proxy"
+        assert result.error == "connection failed"
 
     # ------------------------------------------------------------------
     # All protocols are exercised
