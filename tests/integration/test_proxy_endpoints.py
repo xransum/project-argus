@@ -1,4 +1,4 @@
-"""Functional tests for POST /api/proxy/check"""
+"""Integration tests for POST /api/proxy/check"""
 
 from unittest.mock import AsyncMock, patch
 
@@ -122,3 +122,19 @@ class TestProxyCheckEndpoint:
         data = response.json()
         assert "job_id" in data
         assert len(data["job_id"]) == 36  # UUID format
+
+    def test_proxy_check_missing_ip(self, client):
+        # ":8080" — empty IP part triggers the validator's missing-ip branch
+        response = client.post(
+            "/api/proxy/check",
+            json={"proxies": [":8080"]},
+        )
+        assert response.status_code == 422
+
+    def test_proxy_check_non_integer_port(self, client):
+        # "1.2.3.4:abc" — non-integer port triggers the validator's port-parse branch
+        response = client.post(
+            "/api/proxy/check",
+            json={"proxies": ["1.2.3.4:abc"]},
+        )
+        assert response.status_code == 422

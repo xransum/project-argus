@@ -17,6 +17,7 @@ from project_argus.services.job_service import (
     _http_status,
     _ip_info,
     _now,
+    _proxy_check,
     _reputation_check,
     _ssl_certificate,
     _ssl_info,
@@ -416,3 +417,23 @@ class TestHandlerFunctions:
         with p:
             result = await _ip_info("8.8.8.8")
         assert "ip" in result
+
+    async def test_proxy_check_handler(self):
+        from project_argus.models.proxy_models import ProxyCheckResponse, ProxyProtocolResult
+
+        mock_response = ProxyCheckResponse(
+            ip="1.2.3.4",
+            port=8080,
+            is_open=False,
+            protocols=[
+                ProxyProtocolResult(protocol=p, working=False)  # type: ignore[arg-type]
+                for p in ("http", "https", "socks4", "socks5")
+            ],
+        )
+        with patch(
+            "project_argus.services.job_service._proxy_service.check",
+            new=AsyncMock(return_value=mock_response),
+        ):
+            result = await _proxy_check("1.2.3.4:8080")
+        assert result["ip"] == "1.2.3.4"
+        assert result["port"] == 8080

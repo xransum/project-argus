@@ -6,6 +6,7 @@ from pydantic import ValidationError
 from project_argus.utils.validators import (
     DomainValidator,
     IPValidator,
+    TargetValidator,
     URLValidator,
     validate_domain,
     validate_ip,
@@ -133,6 +134,11 @@ class TestDomainValidator:
         """Test that very short domains are rejected"""
         with pytest.raises(ValidationError):
             DomainValidator(domain="a.b")
+
+    def test_domain_two_chars_rejected(self):
+        # line 197: len(domain) < 3 branch — "ab" is 2 chars, rejected before label split
+        with pytest.raises(ValidationError, match="too short"):
+            DomainValidator(domain="ab")
 
     def test_domain_exceeds_max_length(self):
         """Test that overly long domains are rejected"""
@@ -357,6 +363,10 @@ class TestURLValidatorIsSuspiciousHost:
     def test_private_10_prefix_is_suspicious(self):
         assert URLValidator._is_suspicious_host("10.0.0.1") is True
 
+    def test_172_16_prefix_is_suspicious(self):
+        # line 142: hostname starts with a private range prefix (172.16.)
+        assert URLValidator._is_suspicious_host("172.16.0.1") is True
+
     def test_public_ip_is_not_suspicious(self):
         assert URLValidator._is_suspicious_host("8.8.8.8") is False
 
@@ -447,3 +457,24 @@ class TestStandaloneFunctions:
     def test_validate_ip_invalid_raises(self):
         with pytest.raises(ValueError):
             validate_ip("127.0.0.1")
+
+
+class TestTargetValidator:
+    """Tests for TargetValidator — accepts either a valid IP or a valid domain."""
+
+    def test_empty_target_raises(self):
+        # line 315: empty string hits the early-exit ValueError
+        with pytest.raises(ValidationError, match="Target cannot be empty"):
+            TargetValidator(target="")
+
+    def test_valid_ip_accepted(self):
+        validator = TargetValidator(target="8.8.8.8")
+        assert validator.target == "8.8.8.8"
+
+    def test_valid_domain_accepted(self):
+        validator = TargetValidator(target="example.com")
+        assert validator.target == "example.com"
+
+    def test_invalid_target_raises(self):
+        with pytest.raises(ValidationError, match="neither a valid IP"):
+            TargetValidator(target="not-valid-at-all!")
