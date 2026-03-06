@@ -222,7 +222,7 @@ async def enqueue_job(job_type: str, inputs: List[str]) -> str:
 
 
 async def _run_job(job_id: str, job_type: str) -> None:
-    """Process all pending result rows for a job, one at a time."""
+    """Process all pending result rows for a job concurrently."""
     handler = HANDLERS.get(job_type)
     if handler is None:
         logger.error("No handler for job_type=%r, job_id=%s", job_type, job_id)
@@ -231,11 +231,14 @@ async def _run_job(job_id: str, job_type: str) -> None:
     async with get_db() as conn:
         pending = await get_pending_results(conn, job_id)
 
-    for row in pending:
+    logger.debug("job=%s type=%s items=%d starting", job_id, job_type, len(pending))
+
+    async def _process(row: dict) -> None:
         result_id: int = row["id"]
         item: str = row["input"]
         now = _now()
 
+        logger.debug("job=%s item=%r starting", job_id, item)
         async with get_db() as conn:
             await set_result_running(conn, result_id, now)
 
@@ -244,8 +247,12 @@ async def _run_job(job_id: str, job_type: str) -> None:
             now = _now()
             async with get_db() as conn:
                 await set_result_done(conn, result_id, job_id, result, now)
+            logger.debug("job=%s item=%r done", job_id, item)
         except Exception as exc:
             logger.warning("job=%s item=%r error=%s", job_id, item, exc)
             now = _now()
             async with get_db() as conn:
                 await set_result_error(conn, result_id, job_id, str(exc), now)
+
+    await asyncio.gather(*[_process(row) for row in pending])
+    logger.debug("job=%s type=%s all items complete", job_id, job_type)

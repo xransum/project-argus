@@ -1,6 +1,7 @@
 """Main FastAPI application for Project Argus"""
 
 import logging
+import os
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any, AsyncIterator, Dict
@@ -15,6 +16,15 @@ from .api import blacklist, dns, domain, geoip, http, ip, jobs, proxy, reputatio
 from .db import init_db
 
 logger = logging.getLogger(__name__)
+
+_debug = os.getenv("DEBUG", "").lower() in ("1", "true", "yes")
+logging.basicConfig(
+    level=logging.WARNING,
+    format="%(asctime)s %(levelname)-8s %(name)s - %(message)s",
+    datefmt="%H:%M:%S",
+)
+# Only apply DEBUG to our own code, leave third-party loggers at WARNING
+logging.getLogger("project_argus").setLevel(logging.DEBUG if _debug else logging.INFO)
 
 TEMPLATES_DIR = Path(__file__).resolve().parent / "templates"
 STATIC_DIR = Path(__file__).resolve().parent / "static"
@@ -219,7 +229,7 @@ _ENDPOINTS = {
                 "Proxy Check",
                 "Test whether each proxy is reachable via HTTP, HTTPS, SOCKS4, and SOCKS5.",
                 "proxies",
-                '{"ip": "1.2.3.4", "port": 8080}',
+                "1.2.3.4:8080\n5.6.7.8:3128",
             ),
         },
     }

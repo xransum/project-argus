@@ -158,7 +158,7 @@
 
         function doPoll() {
             $.ajax({
-                url:      "/jobs/" + jobId + "/status",
+                url:      "/api/jobs/" + jobId,
                 method:   "GET",
                 dataType: "json",
                 timeout:  10000
@@ -187,7 +187,7 @@
 
     function fetchResults($panel, jobId) {
         $.ajax({
-            url:      "/jobs/" + jobId + "/results",
+            url:      "/api/jobs/" + jobId + "/results",
             method:   "GET",
             dataType: "json",
             timeout:  15000

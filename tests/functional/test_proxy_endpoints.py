@@ -28,7 +28,7 @@ class TestProxyCheckEndpoint:
         ):
             response = client.post(
                 "/api/proxy/check",
-                json={"proxies": [{"ip": "1.2.3.4", "port": 8080}]},
+                json={"proxies": ["1.2.3.4:8080"]},
             )
 
         assert response.status_code == 202
@@ -46,12 +46,7 @@ class TestProxyCheckEndpoint:
         ):
             response = client.post(
                 "/api/proxy/check",
-                json={
-                    "proxies": [
-                        {"ip": "1.2.3.4", "port": 8080},
-                        {"ip": "5.6.7.8", "port": 3128},
-                    ]
-                },
+                json={"proxies": ["1.2.3.4:8080", "5.6.7.8:3128"]},
             )
 
         assert response.status_code == 202
@@ -60,7 +55,7 @@ class TestProxyCheckEndpoint:
     def test_proxy_check_invalid_ip(self, client):
         response = client.post(
             "/api/proxy/check",
-            json={"proxies": [{"ip": "192.168.1.1", "port": 8080}]},
+            json={"proxies": ["192.168.1.1:8080"]},
         )
         assert response.status_code == 400
         detail = response.json()["detail"]
@@ -69,28 +64,35 @@ class TestProxyCheckEndpoint:
     def test_proxy_check_private_ip_blocked(self, client):
         response = client.post(
             "/api/proxy/check",
-            json={"proxies": [{"ip": "10.0.0.1", "port": 1080}]},
+            json={"proxies": ["10.0.0.1:1080"]},
         )
         assert response.status_code == 400
 
     def test_proxy_check_loopback_blocked(self, client):
         response = client.post(
             "/api/proxy/check",
-            json={"proxies": [{"ip": "127.0.0.1", "port": 8080}]},
+            json={"proxies": ["127.0.0.1:8080"]},
         )
         assert response.status_code == 400
 
     def test_proxy_check_invalid_port_too_high(self, client):
         response = client.post(
             "/api/proxy/check",
-            json={"proxies": [{"ip": "1.2.3.4", "port": 99999}]},
+            json={"proxies": ["1.2.3.4:99999"]},
         )
         assert response.status_code == 422
 
     def test_proxy_check_invalid_port_zero(self, client):
         response = client.post(
             "/api/proxy/check",
-            json={"proxies": [{"ip": "1.2.3.4", "port": 0}]},
+            json={"proxies": ["1.2.3.4:0"]},
+        )
+        assert response.status_code == 422
+
+    def test_proxy_check_malformed_entry(self, client):
+        response = client.post(
+            "/api/proxy/check",
+            json={"proxies": ["notanip"]},
         )
         assert response.status_code == 422
 
@@ -114,7 +116,7 @@ class TestProxyCheckEndpoint:
         ):
             response = client.post(
                 "/api/proxy/check",
-                json={"proxies": [{"ip": "1.2.3.4", "port": 8080}]},
+                json={"proxies": ["1.2.3.4:8080"]},
             )
 
         data = response.json()

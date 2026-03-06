@@ -1,25 +1,24 @@
 """Unit tests for services/proxy_service.py"""
 
-import json
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 from project_argus.models.proxy_models import ProxyCheckResponse, ProxyProtocolResult
 from project_argus.services.proxy_service import (
-    _AUTH_PATTERNS,
     ProxyService,
     _check_protocol,
+    _parse_egress_ip,
     _proxy_url,
 )
 
 
-def _make_mock_client(status_code: int, body: str) -> AsyncMock:
+def _make_mock_client(status_code: int, origin: str = "") -> AsyncMock:
     """Return a mock AsyncClient whose .get() yields a response with the given
-    status code and text body."""
+    status code and an httpbin-style JSON body {"origin": origin}."""
     mock_response = MagicMock()
     mock_response.status_code = status_code
-    mock_response.text = body
+    mock_response.json = MagicMock(return_value={"origin": origin})
 
     mock_client = AsyncMock()
     mock_client.__aenter__ = AsyncMock(return_value=mock_client)
@@ -42,194 +41,211 @@ class TestProxyUrl:
         assert _proxy_url("socks5", "1.2.3.4", 1080) == "socks5://1.2.3.4:1080"
 
 
-class TestAuthPatterns:
-    def test_auth_patterns_is_non_empty_list(self):
-        assert isinstance(_AUTH_PATTERNS, list)
-        assert len(_AUTH_PATTERNS) > 0
+class TestParseEgressIp:
+    def test_single_ip(self):
+        assert _parse_egress_ip({"origin": "1.2.3.4"}) == "1.2.3.4"
 
-    def test_auth_patterns_are_lowercase(self):
-        for pattern in _AUTH_PATTERNS:
-            assert pattern == pattern.lower(), f"Pattern {pattern!r} is not lowercase"
+    def test_multiple_ips_returns_first(self):
+        # httpbin may return comma-separated IPs when hops are present
+        assert _parse_egress_ip({"origin": "1.2.3.4, 5.6.7.8"}) == "1.2.3.4"
+
+    def test_leading_trailing_whitespace_stripped(self):
+        assert _parse_egress_ip({"origin": "  1.2.3.4  "}) == "1.2.3.4"
+
+    def test_missing_origin_key_raises(self):
+        with pytest.raises(KeyError):
+            _parse_egress_ip({})
 
 
 class TestCheckProtocol:
     # ------------------------------------------------------------------
-    # IP match — the happy path
+    # 200 + valid origin = working, egress_ip stored
     # ------------------------------------------------------------------
 
     @pytest.mark.asyncio
-    async def test_ip_match_returns_working(self):
-        body = json.dumps({"origin": "1.2.3.4"})
-        mock_client = _make_mock_client(200, body)
-
+    async def test_200_valid_origin_returns_working(self):
+        mock_client = _make_mock_client(200, origin="1.2.3.4")
         with patch(
-            "project_argus.services.proxy_service.httpx.AsyncClient",
-            return_value=mock_client,
+            "project_argus.services.proxy_service.httpx.AsyncClient", return_value=mock_client
         ):
             result = await _check_protocol("http", "1.2.3.4", 8080)
 
         assert result.working is True
         assert result.protocol == "http"
+        assert result.egress_ip == "1.2.3.4"
         assert result.response_time_ms is not None
         assert result.error is None
 
+    @pytest.mark.asyncio
+    async def test_200_valid_origin_https(self):
+        # https:// proxies previously failed with SSL cert errors on the proxy
+        # tunnel leg; now wired via httpcore.AsyncHTTPProxy with proxy_ssl_context
+        mock_client = _make_mock_client(200, origin="1.2.3.4")
+        with patch(
+            "project_argus.services.proxy_service.httpx.AsyncClient", return_value=mock_client
+        ):
+            result = await _check_protocol("https", "1.2.3.4", 443)
+
+        assert result.working is True
+        assert result.protocol == "https"
+        assert result.egress_ip == "1.2.3.4"
+
+    @pytest.mark.asyncio
+    async def test_200_valid_origin_socks5(self):
+        mock_client = _make_mock_client(200, origin="1.2.3.4")
+        with patch(
+            "project_argus.services.proxy_service.httpx.AsyncClient", return_value=mock_client
+        ):
+            result = await _check_protocol("socks5", "1.2.3.4", 1080)
+
+        assert result.working is True
+        assert result.protocol == "socks5"
+        assert result.egress_ip == "1.2.3.4"
+
+    @pytest.mark.asyncio
+    async def test_200_origin_with_multiple_hops_first_stored(self):
+        # httpbin may return comma-separated IPs; first token is stored
+        mock_client = _make_mock_client(200, origin="1.2.3.4, 9.9.9.9")
+        with patch(
+            "project_argus.services.proxy_service.httpx.AsyncClient", return_value=mock_client
+        ):
+            result = await _check_protocol("http", "1.2.3.4", 8080)
+
+        assert result.working is True
+        assert result.egress_ip == "1.2.3.4"
+
+    @pytest.mark.asyncio
+    async def test_200_different_egress_ip_still_working(self):
+        # Pooled/NAT proxies egress from a different IP — still marked working
+        mock_client = _make_mock_client(200, origin="9.9.9.9")
+        with patch(
+            "project_argus.services.proxy_service.httpx.AsyncClient", return_value=mock_client
+        ):
+            result = await _check_protocol("http", "1.2.3.4", 8080)
+
+        assert result.working is True
+        assert result.egress_ip == "9.9.9.9"
+        assert result.error is None
+
     # ------------------------------------------------------------------
-    # IP mismatch — proxy forwards but origin differs
+    # Non-200 status = not working
     # ------------------------------------------------------------------
 
     @pytest.mark.asyncio
-    async def test_ip_mismatch_returns_not_working(self):
-        body = json.dumps({"origin": "9.9.9.9"})
-        mock_client = _make_mock_client(200, body)
-
+    async def test_non_200_returns_not_working(self):
+        mock_client = _make_mock_client(403, origin="")
         with patch(
-            "project_argus.services.proxy_service.httpx.AsyncClient",
-            return_value=mock_client,
+            "project_argus.services.proxy_service.httpx.AsyncClient", return_value=mock_client
         ):
             result = await _check_protocol("http", "1.2.3.4", 8080)
 
         assert result.working is False
-        assert result.error is not None
-        assert "ip mismatch" in result.error
-        assert "9.9.9.9" in result.error
-
-    # ------------------------------------------------------------------
-    # Valid JSON but missing "origin" key
-    # ------------------------------------------------------------------
+        assert "403" in (result.error or "")
 
     @pytest.mark.asyncio
-    async def test_no_origin_key_returns_not_working(self):
-        body = json.dumps({"foo": "bar"})
-        mock_client = _make_mock_client(200, body)
-
+    async def test_500_returns_not_working(self):
+        mock_client = _make_mock_client(500, origin="")
         with patch(
-            "project_argus.services.proxy_service.httpx.AsyncClient",
-            return_value=mock_client,
-        ):
-            result = await _check_protocol("http", "1.2.3.4", 8080)
-
-        assert result.working is False
-        assert result.error == "unexpected response body"
-
-    # ------------------------------------------------------------------
-    # Non-JSON body — auth/login patterns
-    # ------------------------------------------------------------------
-
-    @pytest.mark.asyncio
-    async def test_auth_pattern_login_detected(self):
-        body = "<html><body><h1>Please Login</h1></body></html>"
-        mock_client = _make_mock_client(200, body)
-
-        with patch(
-            "project_argus.services.proxy_service.httpx.AsyncClient",
-            return_value=mock_client,
-        ):
-            result = await _check_protocol("http", "1.2.3.4", 8080)
-
-        assert result.working is False
-        assert result.error is not None
-        assert result.error.startswith("restricted:")
-
-    @pytest.mark.asyncio
-    async def test_auth_pattern_unauthorized_detected(self):
-        body = "<html><body>401 Unauthorized</body></html>"
-        mock_client = _make_mock_client(200, body)
-
-        with patch(
-            "project_argus.services.proxy_service.httpx.AsyncClient",
-            return_value=mock_client,
+            "project_argus.services.proxy_service.httpx.AsyncClient", return_value=mock_client
         ):
             result = await _check_protocol("https", "1.2.3.4", 8080)
 
         assert result.working is False
-        assert result.error is not None
-        assert result.error.startswith("restricted:")
+        assert "500" in (result.error or "")
+
+    # ------------------------------------------------------------------
+    # JSON parse failure = not working
+    # ------------------------------------------------------------------
 
     @pytest.mark.asyncio
-    async def test_auth_pattern_access_denied_detected(self):
-        body = "<html><body>Access Denied — please sign in</body></html>"
-        mock_client = _make_mock_client(200, body)
+    async def test_missing_origin_key_returns_not_working(self):
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json = MagicMock(return_value={})  # no "origin" key
+
+        mock_client = AsyncMock()
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+        mock_client.get = AsyncMock(return_value=mock_response)
 
         with patch(
-            "project_argus.services.proxy_service.httpx.AsyncClient",
-            return_value=mock_client,
-        ):
-            result = await _check_protocol("socks5", "1.2.3.4", 1080)
-
-        assert result.working is False
-        assert result.error is not None
-        assert result.error.startswith("restricted:")
-
-    @pytest.mark.asyncio
-    async def test_auth_pattern_captcha_detected(self):
-        body = "<html><body>Please complete the captcha to continue</body></html>"
-        mock_client = _make_mock_client(200, body)
-
-        with patch(
-            "project_argus.services.proxy_service.httpx.AsyncClient",
-            return_value=mock_client,
+            "project_argus.services.proxy_service.httpx.AsyncClient", return_value=mock_client
         ):
             result = await _check_protocol("http", "1.2.3.4", 8080)
 
         assert result.working is False
-        assert result.error is not None
-        assert result.error.startswith("restricted:")
-
-    # ------------------------------------------------------------------
-    # Non-JSON body — no recognisable pattern
-    # ------------------------------------------------------------------
+        assert result.error == "invalid response body"
 
     @pytest.mark.asyncio
-    async def test_non_json_no_pattern_returns_unexpected_content(self):
-        body = "<html><body><h1>Welcome to the proxy!</h1></body></html>"
-        mock_client = _make_mock_client(200, body)
+    async def test_json_raises_returns_not_working(self):
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json = MagicMock(side_effect=ValueError("not json"))
+
+        mock_client = AsyncMock()
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+        mock_client.get = AsyncMock(return_value=mock_response)
 
         with patch(
-            "project_argus.services.proxy_service.httpx.AsyncClient",
-            return_value=mock_client,
+            "project_argus.services.proxy_service.httpx.AsyncClient", return_value=mock_client
         ):
             result = await _check_protocol("http", "1.2.3.4", 8080)
 
         assert result.working is False
-        assert result.error == "unexpected content"
+        assert result.error == "invalid response body"
 
     # ------------------------------------------------------------------
-    # HTTP 5xx
-    # ------------------------------------------------------------------
-
-    @pytest.mark.asyncio
-    async def test_returns_not_working_on_500(self):
-        mock_client = _make_mock_client(500, "")
-
-        with patch(
-            "project_argus.services.proxy_service.httpx.AsyncClient",
-            return_value=mock_client,
-        ):
-            result = await _check_protocol("http", "1.2.3.4", 8080)
-
-        assert result.working is False
-        assert result.error == "HTTP 500"
-
-    # ------------------------------------------------------------------
-    # Connection / transport exception
+    # Connection / transport exception = not working
     # ------------------------------------------------------------------
 
     @pytest.mark.asyncio
-    async def test_returns_not_working_on_exception(self):
+    async def test_connection_refused_returns_not_working(self):
         mock_client = AsyncMock()
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
         mock_client.__aexit__ = AsyncMock(return_value=False)
         mock_client.get = AsyncMock(side_effect=Exception("Connection refused"))
 
         with patch(
-            "project_argus.services.proxy_service.httpx.AsyncClient",
-            return_value=mock_client,
+            "project_argus.services.proxy_service.httpx.AsyncClient", return_value=mock_client
+        ):
+            result = await _check_protocol("http", "1.2.3.4", 8080)
+
+        assert result.working is False
+        assert result.protocol == "http"
+        assert "Connection refused" in (result.error or "")
+
+    @pytest.mark.asyncio
+    async def test_timeout_returns_not_working(self):
+        import httpx
+
+        mock_client = AsyncMock()
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+        mock_client.get = AsyncMock(side_effect=httpx.TimeoutException("timed out"))
+
+        with patch(
+            "project_argus.services.proxy_service.httpx.AsyncClient", return_value=mock_client
         ):
             result = await _check_protocol("socks5", "1.2.3.4", 1080)
 
         assert result.working is False
         assert result.protocol == "socks5"
-        assert "Connection refused" in (result.error or "")
+
+    @pytest.mark.asyncio
+    async def test_socks_error_returns_not_working(self):
+        mock_client = AsyncMock()
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+        mock_client.get = AsyncMock(side_effect=Exception(b"socks4"))
+
+        with patch(
+            "project_argus.services.proxy_service.httpx.AsyncClient", return_value=mock_client
+        ):
+            result = await _check_protocol("socks4", "1.2.3.4", 1080)
+
+        assert result.working is False
+        assert result.protocol == "socks4"
 
     # ------------------------------------------------------------------
     # All protocols are exercised
