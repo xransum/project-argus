@@ -16,4 +16,3 @@ DEBUG="${DEBUG:-}" uv run uvicorn project_argus.main:app \
     --port 8000 \
     --reload \
     --reload-dir src/project_argus
-

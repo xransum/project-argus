@@ -1,7 +1,19 @@
 """Test IP-related endpoints"""
 
+from unittest.mock import patch
+
 import pytest
 from fastapi.testclient import TestClient
+
+
+def _submitted(job_type: str, total: int = 1) -> dict:
+    return {
+        "job_id": "job-123",
+        "job_type": job_type,
+        "status": "pending",
+        "total": total,
+        "message": "Job enqueued. Poll /api/jobs/{job_id} for progress.",
+    }
 
 
 @pytest.mark.functional
@@ -10,7 +22,10 @@ class TestIPEndpoints:
 
     def test_ip_info_endpoint(self, client: TestClient, sample_ip: str):
         """Test IP info endpoint returns a job"""
-        response = client.post("/api/ip/info", json={"ips": [sample_ip]})
+        with patch(
+            "project_argus.web.api.common.invoke_lambda", return_value=_submitted("ip/info")
+        ):
+            response = client.post("/api/ip/info", json={"ips": [sample_ip]})
         assert response.status_code == 202
         data = response.json()
         assert "job_id" in data
@@ -20,7 +35,11 @@ class TestIPEndpoints:
 
     def test_ip_bulk_multiple(self, client: TestClient, valid_ips: list):
         """Test IP endpoint accepts multiple IPs"""
-        response = client.post("/api/ip/info", json={"ips": valid_ips})
+        with patch(
+            "project_argus.web.api.common.invoke_lambda",
+            return_value=_submitted("ip/info", total=len(valid_ips)),
+        ):
+            response = client.post("/api/ip/info", json={"ips": valid_ips})
         assert response.status_code == 202
         data = response.json()
         assert data["total"] == len(valid_ips)

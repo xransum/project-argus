@@ -1,346 +1,517 @@
 # Project Argus
 
-A bulk intelligence-gathering API for analyzing URLs, domains, and IP addresses. Built with FastAPI (async), backed by a SQLite job queue, and served with a jQuery UI dark-theme dashboard.
+Project Argus is a bulk intelligence-gathering API for URLs, domains, IP addresses, and proxies.
 
-## Features
+This repo now runs as a local-first AWS-style stack:
 
-### URL Analysis
-- **HTTP Status Check**: Verify reachability, response time, and full redirect chain
-- **Redirect Chain Tracking**: Follows HTTP 3xx redirects, detects loops and cap limits, and identifies client-side redirects (`<meta http-equiv="refresh">` and `window.location` JS patterns)
-- **Headers Inspection**: Fetch full HTTP response headers
+- FastAPI + Jinja web app in the same repo
+- Lambda handlers in the same repo
+- DynamoDB for job metadata and live progress
+- S3 for one final JSON result per job
+- SQS between the orchestrator Lambda and executor Lambdas
+- LocalStack for local AWS emulation
 
-### Domain Intelligence
-- **Domain Info**: Registrar, creation/expiration dates
-- **SSL Check**: Certificate validity and expiry
-- **DNS Records**: A, AAAA, MX, TXT, CNAME, NS
-- **WHOIS Lookup**: Raw registration data
-- **GeoIP**: Geographic location of the domain's server
-- **Reputation**: Threat-intelligence reputation score
-- **Blacklist Check**: Known blacklist status
-- **SSL Certificate Details**: Full certificate chain
-- **Subdomain Enumeration**: Known subdomains
-- **Hosting & ASN Info**: Hosting provider and autonomous system
+This README is written as a clone-to-running guide for a fresh machine.
 
-### IP Address Analysis
-- **IP Info**: Hostname, ASN, organization, ISP
-- **Reverse DNS**: PTR record lookup
-- **GeoIP**: Geographic location
-- **Reputation**: Threat-intelligence reputation score
-- **Blacklist Check**: DNSBL and threat feed status
-- **WHOIS Lookup**: Network registration data
-
-### Proxy Checking
-- **Protocol Probing**: Tests each proxy against HTTP, HTTPS, SOCKS4, and SOCKS5 concurrently
-- **Open/Closed Status**: Reports whether any protocol succeeded (`is_open`)
-- **Per-Protocol Timing**: Response time in milliseconds for each working protocol
-- **Private IP Rejection**: Loopback and RFC-1918 addresses are blocked at the API layer
-
-### Async Job System
-All bulk endpoints enqueue a job and return immediately. Clients poll for status and paginated results.
-
-## Installation
-
-### Prerequisites
-
-- Python 3.11+
-- Node.js + npm (for frontend vendor assets)
-- [uv](https://github.com/astral-sh/uv) package manager
-
-### Install uv
+## Copy/Paste Quickstart
 
 ```bash
-# macOS/Linux
-curl -LsSf https://astral.sh/uv/install.sh | sh
-
-# Windows
-powershell -c "irm https://astral.sh/uv/install.ps1 | iex"
-```
-
-### Clone and build
-
-```bash
-git clone https://github.com/yourusername/project-argus.git
+git clone https://github.com/xransum/project-argus.git
 cd project-argus
 
-# Install Python deps + build frontend vendor assets
+./scripts/build.sh
+
+docker info
+docker compose -f infra/local/docker-compose.yml up --build -d
+bash infra/local/bootstrap.sh
+
+curl -s http://localhost:8000/health
+curl -s http://localhost:8000/api
+```
+
+Submit a real test job:
+
+```bash
+curl -s -X POST http://localhost:8000/api/domain/dns \
+  -H "Content-Type: application/json" \
+  -d '{"domains": ["example.com"]}'
+```
+
+Then poll with the returned `job_id`:
+
+```bash
+curl -s http://localhost:8000/api/jobs/<job_id>
+curl -s http://localhost:8000/api/jobs/<job_id>/results
+```
+
+## What Works Today
+
+Verified locally with Docker + LocalStack:
+
+- `POST /api/http/status`
+- `POST /api/domain/dns`
+- `POST /api/ip/geoip`
+- `POST /api/proxy/check`
+- `GET /api/jobs/{job_id}`
+- `GET /api/jobs/{job_id}/results`
+
+Verified flow:
+
+1. Web app accepts the request.
+2. Web app invokes the orchestrator Lambda.
+3. Orchestrator writes a DynamoDB job record.
+4. Orchestrator sends the job to the family SQS queue.
+5. Family executor Lambda consumes the queue message.
+6. Executor writes live progress back to DynamoDB.
+7. Executor writes one final JSON result to S3.
+8. Jobs and job_results Lambdas serve polling reads.
+
+## Repository Layout
+
+```text
+src/project_argus/
+  lambdas/         Lambda handlers
+  shared/          AWS config, boto3 clients, job contracts, storage, orchestration
+  web/             Active FastAPI app and family-based routes
+  models/          Request and response models
+  services/        Reused domain, IP, proxy, and URL service logic
+  templates/       Jinja templates
+  static/          Frontend assets
+
+infra/local/
+  docker-compose.yml
+  bootstrap.sh
+
+scripts/
+  build.sh
+  build-lambdas.sh
+  dev.sh
+  start.sh
+  test.sh
+```
+
+## API Surface
+
+### HTTP
+
+```text
+POST /api/http/status
+POST /api/http/headers
+```
+
+Body:
+
+```json
+{"urls": ["https://example.com"]}
+```
+
+### Domain
+
+```text
+POST /api/domain/info
+POST /api/domain/ssl
+POST /api/domain/dns
+POST /api/domain/whois
+POST /api/domain/geoip
+POST /api/domain/reputation
+POST /api/domain/blacklist
+POST /api/domain/ssl-certificate
+POST /api/domain/subdomains
+POST /api/domain/hosting
+```
+
+Body:
+
+```json
+{"domains": ["example.com"]}
+```
+
+### IP
+
+```text
+POST /api/ip/info
+POST /api/ip/dns
+POST /api/ip/whois
+POST /api/ip/geoip
+POST /api/ip/reputation
+POST /api/ip/blacklist
+```
+
+Body:
+
+```json
+{"ips": ["1.1.1.1"]}
+```
+
+### Proxy
+
+```text
+POST /api/proxy/check
+```
+
+Body:
+
+```json
+{"proxies": ["1.1.1.1:8080"]}
+```
+
+### Jobs
+
+```text
+GET /api/jobs/{job_id}
+GET /api/jobs/{job_id}/results
+```
+
+## Prerequisites
+
+Install these on a fresh machine:
+
+- Git
+- Python 3.11
+- Node.js and npm
+- `uv`
+- Docker Engine or Docker Desktop
+- Docker Compose plugin
+
+The project also uses:
+
+- LocalStack via Docker
+- AWS CLI only inside the LocalStack container through `awslocal`
+
+## Supported Local Environments
+
+Verified:
+
+- Linux host with Docker Engine and Docker Compose
+- Linux VM with enough CPU, RAM, and disk for Docker + LocalStack
+
+Expected to work, but not verified in this repo yet:
+
+- Docker Desktop on macOS
+- Docker Desktop on Windows with a Linux container backend
+
+If you run this outside Linux, the application stack should still be portable, but Docker socket behavior, filesystem mounts, and LocalStack Lambda execution may differ enough that you should treat it as best effort until you verify it on your machine.
+
+## Clone And Prepare
+
+```bash
+git clone https://github.com/xransum/project-argus.git
+cd project-argus
+```
+
+Optional sanity checks:
+
+```bash
+python --version
+node --version
+npm --version
+uv --version
+docker --version
+docker compose version
+```
+
+## Linux Docker Permissions
+
+If `docker info` fails with:
+
+```text
+permission denied while trying to connect to the docker API at unix:///var/run/docker.sock
+```
+
+add your user to the `docker` group:
+
+```bash
+sudo usermod -aG docker $USER
+newgrp docker
+docker info
+```
+
+If that still does not work, log out and log back in, then run:
+
+```bash
+docker info
+```
+
+This applies across common Linux distros, including Fedora, Debian, Ubuntu, and CentOS.
+
+## SELinux Notes
+
+If your distro enforces SELinux, this repo already includes the compose settings needed for bind mounts and LocalStack's Docker socket access:
+
+- bind mounts use SELinux relabel flags
+- LocalStack runs with `security_opt: label=disable`
+- LocalStack runs as `root` so it can use `/var/run/docker.sock`
+
+On distros without SELinux enabled by default, this section is mostly irrelevant and the same compose file should still work.
+
+You should not need to disable SELinux globally.
+
+## First-Time Local Build
+
+This installs Python deps, npm deps, and frontend vendor assets:
+
+```bash
 ./scripts/build.sh
 ```
 
-`scripts/build.sh` runs `npm install` and copies jQuery and jQuery UI (dark-hive theme) into `src/project_argus/static/vendor/`.
+## Web App Only
 
-## Running the API
-
-### Development (auto-reload)
+Hot reload mode outside Docker:
 
 ```bash
 ./scripts/dev.sh
 ```
 
-### Production
+Production-style local run outside Docker:
 
 ```bash
 ./scripts/start.sh
 ```
 
-### Manual
+## Full Local AWS Stack
+
+### 1. Start Docker services
 
 ```bash
-uv run uvicorn src.project_argus.main:app --host 0.0.0.0 --port 8000
+docker compose -f infra/local/docker-compose.yml up --build -d
 ```
 
-The app will be available at:
+Check status:
 
-| URL | Description |
-|-----|-------------|
-| `http://localhost:8000/` | Dashboard UI |
-| `http://localhost:8000/docs` | Swagger / interactive docs |
-| `http://localhost:8000/redoc` | ReDoc |
-| `http://localhost:8000/api` | JSON endpoint discovery |
+```bash
+docker compose -f infra/local/docker-compose.yml ps -a
+```
 
-## API Endpoints
+Expected services:
 
-All bulk endpoints accept **POST** with a JSON body. Responses are job references — poll `/jobs/{job_id}/status` and `/jobs/{job_id}/results` for output.
+- `project-argus-localstack`
+- `local-web-1`
+
+### 2. Bootstrap local AWS resources and Lambdas
+
+```bash
+bash infra/local/bootstrap.sh
+```
+
+This script will:
+
+- wait for LocalStack
+- create DynamoDB table `project-argus-jobs`
+- enable DynamoDB TTL on `expires_at`
+- create S3 bucket `project-argus-results`
+- create SQS queues and DLQs for `http`, `domain`, `ip`, and `proxy`
+- build a Lambda-compatible zip in `.build/lambdas/`
+- deploy all Lambda functions into LocalStack
+- wire SQS event source mappings to family executors
+
+### 3. Open the app
+
+```text
+http://localhost:8000
+```
+
+### 4. Health checks
+
+```bash
+curl -s http://localhost:8000/health
+curl -s http://localhost:8000/api
+```
+
+## Fresh Machine Quickstart
+
+If you just want the shortest path from clone to running:
+
+```bash
+git clone https://github.com/xransum/project-argus.git
+cd project-argus
+./scripts/build.sh
+docker info
+docker compose -f infra/local/docker-compose.yml up --build -d
+bash infra/local/bootstrap.sh
+curl -s http://localhost:8000/health
+```
+
+## Example End-To-End Checks
 
 ### HTTP
 
-```
-POST /api/http/status      { "urls": ["https://example.com", ...] }
-POST /api/http/headers     { "urls": ["https://example.com", ...] }
+```bash
+curl -s -X POST http://localhost:8000/api/http/status \
+  -H "Content-Type: application/json" \
+  -d '{"urls": ["https://example.com"]}'
 ```
 
 ### Domain
 
-```
-POST /api/domain/info              { "domains": ["example.com", ...] }
-POST /api/domain/ssl               { "domains": [...] }
-POST /api/domain/dns               { "domains": [...] }
-POST /api/domain/whois             { "domains": [...] }
-POST /api/domain/geoip             { "domains": [...] }
-POST /api/domain/reputation        { "domains": [...] }
-POST /api/domain/blacklist         { "domains": [...] }
-POST /api/domain/ssl-certificate   { "domains": [...] }
-POST /api/domain/subdomains        { "domains": [...] }
-POST /api/domain/hosting           { "domains": [...] }
+```bash
+curl -s -X POST http://localhost:8000/api/domain/dns \
+  -H "Content-Type: application/json" \
+  -d '{"domains": ["example.com"]}'
 ```
 
 ### IP
 
-```
-POST /api/ip/info         { "ips": ["1.1.1.1", ...] }
-POST /api/ip/dns          { "ips": [...] }
-POST /api/ip/geoip        { "ips": [...] }
-POST /api/ip/reputation   { "ips": [...] }
-POST /api/ip/blacklist    { "ips": [...] }
-POST /api/ip/whois        { "ips": [...] }
+```bash
+curl -s -X POST http://localhost:8000/api/ip/geoip \
+  -H "Content-Type: application/json" \
+  -d '{"ips": ["1.1.1.1"]}'
 ```
 
 ### Proxy
 
-```
-POST /api/proxy/check     { "proxies": [{"ip": "1.2.3.4", "port": 8080}, ...] }
-```
-
-Each result entry reports per-protocol status for HTTP, HTTPS, SOCKS4, and SOCKS5.
-
-### Jobs
-
-```
-GET /jobs/{job_id}/status
-GET /jobs/{job_id}/results
-GET /jobs/{job_id}/results?nextToken={token}   # paginated
-```
-
-### Utility
-
-```
-GET /         # Dashboard UI
-GET /api      # JSON endpoint discovery
-GET /health   # Health check
-```
-
-## Usage Examples
-
-### cURL
-
 ```bash
-# Submit a bulk URL status job
-curl -s -X POST http://localhost:8000/api/http/status \
-  -H "Content-Type: application/json" \
-  -d '{"urls": ["https://example.com", "https://google.com"]}'
-
-# Submit a proxy check job
 curl -s -X POST http://localhost:8000/api/proxy/check \
   -H "Content-Type: application/json" \
-  -d '{"proxies": [{"ip": "203.0.113.1", "port": 8080}]}'
-
-# Poll for results (replace <job_id>)
-curl -s http://localhost:8000/jobs/<job_id>/status
-curl -s http://localhost:8000/jobs/<job_id>/results
+  -d '{"proxies": ["1.1.1.1:8080"]}'
 ```
 
-### Python
-
-```python
-import asyncio
-import httpx
-
-async def main():
-    async with httpx.AsyncClient() as client:
-        # Submit job
-        r = await client.post(
-            "http://localhost:8000/api/http/status",
-            json={"urls": ["https://example.com"]},
-        )
-        job_id = r.json()["job_id"]
-
-        # Poll until done
-        while True:
-            status = await client.get(f"http://localhost:8000/jobs/{job_id}/status")
-            if status.json()["status"] in ("completed", "failed"):
-                break
-            await asyncio.sleep(1)
-
-        results = await client.get(f"http://localhost:8000/jobs/{job_id}/results")
-        print(results.json())
-
-asyncio.run(main())
-```
-
-## URL Status Response
-
-`/api/url/status` results include full redirect chain details:
+Each request returns a payload like:
 
 ```json
 {
-  "url": "http://example.com",
-  "final_url": "https://example.com/landing",
-  "status_code": 200,
-  "is_reachable": true,
-  "response_time_ms": 143.5,
-  "redirect_count": 2,
-  "redirect_loop": false,
-  "redirect_limit_reached": false,
-  "redirect_chain": [
-    { "url": "http://example.com", "status_code": 301, "location": "https://example.com", "redirect_type": "http" },
-    { "url": "https://example.com", "status_code": 200, "location": null, "redirect_type": "meta-refresh" }
-  ]
+  "job_id": "...",
+  "job_type": "http/status",
+  "status": "pending",
+  "total": 1,
+  "message": "Job enqueued. Poll /api/jobs/{job_id} for progress."
 }
 ```
 
-`redirect_type` values: `"http"` (3xx), `"meta-refresh"` (`<meta http-equiv="refresh">`), `"js-location"` (`window.location` / `location.href`).
-
-## Proxy Check Response
-
-`/api/proxy/check` results report per-protocol status for each `{ip, port}` pair:
-
-```json
-{
-  "ip": "203.0.113.1",
-  "port": 8080,
-  "is_open": true,
-  "protocols": [
-    { "protocol": "http",   "working": true,  "response_time_ms": 312.4, "error": null },
-    { "protocol": "https",  "working": true,  "response_time_ms": 418.1, "error": null },
-    { "protocol": "socks4", "working": false, "response_time_ms": null,  "error": "Connect timeout" },
-    { "protocol": "socks5", "working": false, "response_time_ms": null,  "error": "Connect timeout" }
-  ]
-}
-```
-
-`is_open` is `true` if at least one protocol succeeded.
-
-## Testing
+Then poll:
 
 ```bash
-# Run all tests
+curl -s http://localhost:8000/api/jobs/<job_id>
+curl -s http://localhost:8000/api/jobs/<job_id>/results
+```
+
+Note:
+
+- the first poll may still show `pending`
+- that is normal when LocalStack is cold-starting Lambda runtime containers
+- poll again after a few seconds
+
+## Logs And Debugging
+
+Show service status:
+
+```bash
+docker compose -f infra/local/docker-compose.yml ps -a
+```
+
+Show web logs:
+
+```bash
+docker compose -f infra/local/docker-compose.yml logs -f web
+```
+
+Show LocalStack logs:
+
+```bash
+docker compose -f infra/local/docker-compose.yml logs -f localstack
+```
+
+Check DynamoDB jobs directly:
+
+```bash
+docker compose -f infra/local/docker-compose.yml exec -T localstack \
+  awslocal dynamodb scan --table-name project-argus-jobs
+```
+
+Check Lambda mappings:
+
+```bash
+docker compose -f infra/local/docker-compose.yml exec -T localstack \
+  awslocal lambda list-event-source-mappings
+```
+
+Check queue depth:
+
+```bash
+docker compose -f infra/local/docker-compose.yml exec -T localstack \
+  awslocal sqs get-queue-attributes \
+  --queue-url http://localhost:4566/000000000000/project-argus-http-queue \
+  --attribute-names ApproximateNumberOfMessages ApproximateNumberOfMessagesNotVisible
+```
+
+## Rebuild And Reset
+
+Rebuild just the web container:
+
+```bash
+docker compose -f infra/local/docker-compose.yml up --build -d web
+```
+
+Redeploy Lambdas and local AWS resources:
+
+```bash
+bash infra/local/bootstrap.sh
+```
+
+Stop services:
+
+```bash
+docker compose -f infra/local/docker-compose.yml down
+```
+
+Blow away LocalStack state and rebuilt artifacts:
+
+```bash
+docker compose -f infra/local/docker-compose.yml down
+rm -rf .build .localstack
+docker compose -f infra/local/docker-compose.yml up --build -d
+bash infra/local/bootstrap.sh
+```
+
+## Tests
+
+Run all tests:
+
+```bash
 ./scripts/test.sh
-
-# Or directly
-uv run pytest
-
-# Specific file
-uv run pytest tests/unit/test_url_service.py -v
 ```
 
-### Test structure
+Run the focused migrated route suite:
 
-```
-tests/
-├── conftest.py
-├── unit/
-│   ├── test_db.py
-│   ├── test_domain_service.py
-│   ├── test_ip_service.py
-│   ├── test_job_service.py
-│   ├── test_proxy_service.py
-│   ├── test_url_service.py
-│   └── utils/
-│       ├── test_http.py
-│       └── test_validators.py
-├── functional/
-│   ├── test_main.py
-│   ├── test_url_endpoints.py        # POST /api/http/*
-│   ├── test_domain_endpoints.py     # POST /api/domain/*
-│   ├── test_ip_endpoints.py         # POST /api/ip/*
-│   ├── test_proxy_endpoints.py      # POST /api/proxy/*
-│   ├── test_jobs_endpoints.py       # GET /jobs/*
-│   ├── test_blacklist_endpoints.py
-│   ├── test_geoip_endpoints.py
-│   ├── test_reputation_endpoints.py
-│   ├── test_ssl_endpoints.py
-│   └── test_whois_endpoints.py
-└── integration/
-    └── test_api_integration.py
+```bash
+uv run pytest tests/integration/test_main.py tests/integration/test_routes.py tests/unit/utils/test_validators.py
 ```
 
-## Project Structure
+## Known Behavior
 
-```
-project-argus/
-├── package.json                          # npm deps (jQuery, jQuery UI)
-├── scripts/
-│   ├── build.sh                          # npm install + vendor copy
-│   ├── dev.sh                            # build + uvicorn --reload
-│   ├── start.sh                          # build + uvicorn prod
-│   └── test.sh                           # pytest runner
-├── src/project_argus/
-│   ├── api/
-│   │   ├── http.py                       # POST /api/http/* (status, headers)
-│   │   ├── domain.py                     # POST /api/domain/*
-│   │   ├── ip.py                         # POST /api/ip/*
-│   │   ├── proxy.py                      # POST /api/proxy/check
-│   │   ├── blacklist.py                  # POST /api/blacklist/*
-│   │   ├── dns.py                        # POST /api/dns/*
-│   │   ├── geoip.py                      # POST /api/geoip/*
-│   │   ├── reputation.py                 # POST /api/reputation/*
-│   │   ├── ssl.py                        # POST /api/ssl/*
-│   │   ├── whois.py                      # POST /api/whois/*
-│   │   └── jobs.py                       # GET /jobs/*
-│   ├── models/
-│   │   ├── url_models.py                 # URLStatusResponse, RedirectHop
-│   │   ├── proxy_models.py               # ProxyTarget, ProxyBulkRequest, ProxyCheckResponse
-│   │   └── job_models.py                 # JobCreatedResponse, JobStatusResponse
-│   ├── services/
-│   │   ├── url_service.py                # redirect chain + client-side detection
-│   │   ├── domain_service.py
-│   │   ├── ip_service.py
-│   │   ├── proxy_service.py              # concurrent HTTP/HTTPS/SOCKS4/SOCKS5 probing
-│   │   └── job_service.py                # async job queue + HANDLERS dispatch
-│   ├── utils/
-│   │   ├── http.py                       # user-agent pool, DEFAULT_REQUEST_HEADERS, extract_client_redirect()
-│   │   └── validators.py                 # validate_url(), validate_domain(), validate_ip()
-│   ├── static/
-│   │   └── js/app.js                     # dashboard JS (dropdown, auto-poll, syntax highlight)
-│   ├── templates/
-│   │   ├── _head.html                    # CSS design tokens + component styles
-│   │   ├── _scripts.html                 # script tags
-│   │   └── index.html                    # jQuery UI tabs dashboard
-│   ├── db.py                             # SQLite init + helpers
-│   └── main.py                           # FastAPI app, _ENDPOINTS registry, lifespan
-├── tests/
-└── pyproject.toml
-```
+- `http/status` can complete with SSL verification errors for some outbound HTTPS checks in the Lambda runtime
+- that does not break the queue/job/result pipeline
+- if needed, CA trust handling inside Lambda packaging is the next improvement
 
-## License
+## Running In A VM
 
-MIT License — see LICENSE file for details.
+Yes, this should work in a VM.
+
+The stack is not tiny, but it is reasonable if the VM has enough headroom for:
+
+- Docker Engine
+- LocalStack
+- one web container
+- short-lived Lambda runtime containers
+- Python and npm tooling during builds
+
+Practical recommendation:
+
+- 4 vCPU minimum
+- 8 GB RAM minimum
+- 12 to 16 GB RAM preferred if you do repeated rebuilds and keep browser/tools open
+- 20+ GB free disk space for images, build artifacts, npm cache, and Docker layers
+
+If the VM is too small, the pain points will be:
+
+- slow Docker image builds
+- slow Lambda cold starts
+- LocalStack becoming sluggish under repeated redeploys
+- host swap pressure during `docker compose up --build` and `bootstrap.sh`
+
+If you plan to run this in a VM regularly, I would treat this as the comfortable floor:
+
+- 4 vCPU
+- 12 GB RAM
+- SSD-backed storage
+
+If you want the most reliable experience, a normal Linux install or a well-provisioned VM is fine. A tiny VM with 2 cores and 4 GB RAM will be frustrating.

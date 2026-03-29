@@ -4,7 +4,6 @@ import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-
 from project_argus.models.proxy_models import ProxyCheckResponse, ProxyProtocolResult
 from project_argus.services.proxy_service import (
     ProxyService,

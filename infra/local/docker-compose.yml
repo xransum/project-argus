@@ -1,0 +1,52 @@
+services:
+  localstack:
+    image: localstack/localstack:3.8
+    container_name: project-argus-localstack
+    user: "0:0"
+    security_opt:
+      - label=disable
+    ports:
+      - "4566:4566"
+    environment:
+      SERVICES: lambda,dynamodb,s3,sqs
+      AWS_DEFAULT_REGION: us-east-1
+      DEBUG: 1
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:z
+      - ./.localstack:/var/lib/localstack:Z
+
+  web:
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+    working_dir: /app
+    ports:
+      - "8000:8000"
+    environment:
+      DEBUG: "true"
+      PYTHONPATH: /app/src
+      AWS_REGION: us-east-1
+      AWS_ENDPOINT_URL: http://localstack:4566
+      AWS_ACCESS_KEY_ID: test
+      AWS_SECRET_ACCESS_KEY: test
+      ARGUS_JOBS_TABLE: project-argus-jobs
+      ARGUS_RESULTS_BUCKET: project-argus-results
+      ARGUS_ORCHESTRATOR_FUNCTION: project-argus-orchestrator
+      ARGUS_JOBS_FUNCTION: project-argus-jobs
+      ARGUS_JOB_RESULTS_FUNCTION: project-argus-job-results
+      ARGUS_HTTP_QUEUE_URL: http://localstack:4566/000000000000/project-argus-http-queue
+      ARGUS_DOMAIN_QUEUE_URL: http://localstack:4566/000000000000/project-argus-domain-queue
+      ARGUS_IP_QUEUE_URL: http://localstack:4566/000000000000/project-argus-ip-queue
+      ARGUS_PROXY_QUEUE_URL: http://localstack:4566/000000000000/project-argus-proxy-queue
+    volumes:
+      - ../../src:/app/src:Z
+      - ../../scripts:/app/scripts:Z
+      - ../../package.json:/app/package.json:Z
+      - ../../pyproject.toml:/app/pyproject.toml:Z
+      - ../../uv.lock:/app/uv.lock:Z
+    command:
+      - /bin/bash
+      - -lc
+      - if [ ! -d src/project_argus/static/vendor ]; then bash scripts/build.sh; fi && /root/.local/bin/uv run uvicorn project_argus.main:app --host 0.0.0.0 --port 8000
+    depends_on:
+      - localstack

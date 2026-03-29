@@ -1,6 +1,4 @@
-"""Functional tests for main.py routes — index, api_root, health_check."""
-
-from unittest.mock import AsyncMock, patch
+"""Functional tests for core web routes."""
 
 import pytest
 from fastapi.testclient import TestClient
@@ -42,14 +40,9 @@ class TestAPIRoot:
         data = client.get("/api").json()
         assert "endpoints" in data
         assert "http" in data["endpoints"]
-        assert "dns" in data["endpoints"]
-        assert "whois" in data["endpoints"]
-        assert "geoip" in data["endpoints"]
-        assert "reputation" in data["endpoints"]
-        assert "blacklist" in data["endpoints"]
-        assert "ssl" in data["endpoints"]
         assert "domain" in data["endpoints"]
         assert "ip" in data["endpoints"]
+        assert "proxy" in data["endpoints"]
 
     def test_api_root_has_jobs(self, client):
         data = client.get("/api").json()
@@ -73,20 +66,7 @@ class TestIndexPage:
         assert "text/html" in response.headers.get("content-type", "")
 
 
-class TestLifespan:
-    def test_app_starts_and_db_initialised(self):
-        """TestClient triggers lifespan, so init_db is called on startup."""
-        with patch("project_argus.main.init_db", new_callable=AsyncMock) as mock_init:
-            from project_argus.main import app
-
-            with TestClient(app):
-                pass
-
-            mock_init.assert_called_once()
-
-    def test_app_accessible_after_startup(self):
-        from project_argus.main import app
-
-        with TestClient(app) as c:
-            response = c.get("/health")
-            assert response.status_code == 200
+class TestAppAvailability:
+    def test_app_accessible_after_startup(self, client):
+        response = client.get("/health")
+        assert response.status_code == 200

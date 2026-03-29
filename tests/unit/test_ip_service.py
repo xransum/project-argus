@@ -4,7 +4,6 @@ import socket
 from unittest.mock import patch
 
 import pytest
-
 from project_argus.services.ip_service import IPService
 
 

@@ -114,18 +114,14 @@ def dev(session):
 def integration(session):
     """Run integration tests"""
     session.install(".[dev]")
-    session.run(
-        "pytest", "tests/integration", "-m", "integration", *session.posargs
-    )
+    session.run("pytest", "tests/integration", "-m", "integration", *session.posargs)
 
 
 @nox.session(python=PYTHON_VERSIONS[0])
 def functional(session):
     """Run functional/E2E tests"""
     session.install(".[dev]")
-    session.run(
-        "pytest", "tests/functional", "-m", "functional", *session.posargs
-    )
+    session.run("pytest", "tests/functional", "-m", "functional", *session.posargs)
 
 
 @nox.session(python=PYTHON_VERSIONS[0])

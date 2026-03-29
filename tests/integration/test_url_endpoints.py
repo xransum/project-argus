@@ -1,7 +1,19 @@
 """Test HTTP/URL endpoints"""
 
+from unittest.mock import patch
+
 import pytest
 from fastapi.testclient import TestClient
+
+
+def _submitted(job_type: str, total: int = 1) -> dict:
+    return {
+        "job_id": "job-123",
+        "job_type": job_type,
+        "status": "pending",
+        "total": total,
+        "message": "Job enqueued. Poll /api/jobs/{job_id} for progress.",
+    }
 
 
 @pytest.mark.functional
@@ -10,7 +22,10 @@ class TestHTTPEndpoints:
 
     def test_http_status_endpoint(self, client: TestClient, sample_url: str):
         """Test HTTP status endpoint returns a job"""
-        response = client.post("/api/http/status", json={"urls": [sample_url]})
+        with patch(
+            "project_argus.web.api.common.invoke_lambda", return_value=_submitted("http/status")
+        ):
+            response = client.post("/api/http/status", json={"urls": [sample_url]})
         assert response.status_code == 202
         data = response.json()
         assert "job_id" in data
@@ -20,7 +35,10 @@ class TestHTTPEndpoints:
 
     def test_http_headers_endpoint(self, client: TestClient, sample_url: str):
         """Test HTTP headers endpoint returns a job"""
-        response = client.post("/api/http/headers", json={"urls": [sample_url]})
+        with patch(
+            "project_argus.web.api.common.invoke_lambda", return_value=_submitted("http/headers")
+        ):
+            response = client.post("/api/http/headers", json={"urls": [sample_url]})
         assert response.status_code == 202
         data = response.json()
         assert "job_id" in data
@@ -30,7 +48,11 @@ class TestHTTPEndpoints:
 
     def test_http_status_bulk(self, client: TestClient, valid_urls: list):
         """Test HTTP status endpoint accepts multiple URLs"""
-        response = client.post("/api/http/status", json={"urls": valid_urls})
+        with patch(
+            "project_argus.web.api.common.invoke_lambda",
+            return_value=_submitted("http/status", total=len(valid_urls)),
+        ):
+            response = client.post("/api/http/status", json={"urls": valid_urls})
         assert response.status_code == 202
         data = response.json()
         assert data["total"] == len(valid_urls)

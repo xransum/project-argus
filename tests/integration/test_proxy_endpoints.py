@@ -1,30 +1,22 @@
 """Integration tests for POST /api/proxy/check"""
 
-from unittest.mock import AsyncMock, patch
-
-from project_argus.models.proxy_models import ProxyCheckResponse, ProxyProtocolResult
+from unittest.mock import patch
 
 
-def _make_proxy_response(ip: str, port: int, working: bool = False) -> ProxyCheckResponse:
-    protocols = [
-        ProxyProtocolResult(
-            protocol=p,  # type: ignore[arg-type]
-            working=working,
-            response_time_ms=10.0 if working else None,
-            error=None if working else "timeout",
-        )
-        for p in ("http", "https", "socks4", "socks5")
-    ]
-    return ProxyCheckResponse(ip=ip, port=port, is_open=working, protocols=protocols)
+def _submitted(job_type: str, total: int = 1) -> dict:
+    return {
+        "job_id": "job-123",
+        "job_type": job_type,
+        "status": "pending",
+        "total": total,
+        "message": "Job enqueued. Poll /api/jobs/{job_id} for progress.",
+    }
 
 
 class TestProxyCheckEndpoint:
     def test_proxy_check_single(self, client):
-        mock_result = _make_proxy_response("1.2.3.4", 8080, working=False)
-
         with patch(
-            "project_argus.services.proxy_service.ProxyService.check",
-            new=AsyncMock(return_value=mock_result),
+            "project_argus.web.api.common.invoke_lambda", return_value=_submitted("proxy/check")
         ):
             response = client.post(
                 "/api/proxy/check",
@@ -38,11 +30,9 @@ class TestProxyCheckEndpoint:
         assert data["status"] == "pending"
 
     def test_proxy_check_multiple(self, client):
-        mock_result = _make_proxy_response("1.2.3.4", 8080)
-
         with patch(
-            "project_argus.services.proxy_service.ProxyService.check",
-            new=AsyncMock(return_value=mock_result),
+            "project_argus.web.api.common.invoke_lambda",
+            return_value=_submitted("proxy/check", total=2),
         ):
             response = client.post(
                 "/api/proxy/check",
@@ -108,11 +98,8 @@ class TestProxyCheckEndpoint:
         assert response.status_code == 422
 
     def test_proxy_check_returns_job_id(self, client):
-        mock_result = _make_proxy_response("1.2.3.4", 8080)
-
         with patch(
-            "project_argus.services.proxy_service.ProxyService.check",
-            new=AsyncMock(return_value=mock_result),
+            "project_argus.web.api.common.invoke_lambda", return_value=_submitted("proxy/check")
         ):
             response = client.post(
                 "/api/proxy/check",
@@ -121,7 +108,7 @@ class TestProxyCheckEndpoint:
 
         data = response.json()
         assert "job_id" in data
-        assert len(data["job_id"]) == 36  # UUID format
+        assert data["job_id"] == "job-123"
 
     def test_proxy_check_missing_ip(self, client):
         # ":8080" — empty IP part triggers the validator's missing-ip branch

@@ -1,8 +1,6 @@
 """Unit tests for validation utilities"""
 
 import pytest
-from pydantic import ValidationError
-
 from project_argus.utils.validators import (
     DomainValidator,
     IPValidator,
@@ -12,6 +10,7 @@ from project_argus.utils.validators import (
     validate_ip,
     validate_url,
 )
+from pydantic import ValidationError
 
 
 class TestURLValidator:

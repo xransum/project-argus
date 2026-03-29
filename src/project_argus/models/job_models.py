@@ -8,7 +8,7 @@ from pydantic import BaseModel, Field
 # Job status literals
 # ---------------------------------------------------------------------------
 
-JobStatus = Literal["pending", "running", "completed", "failed"]
+JobStatus = Literal["pending", "running", "completed", "partial", "failed"]
 ResultStatus = Literal["pending", "running", "completed", "failed"]
 
 # ---------------------------------------------------------------------------
@@ -57,6 +57,10 @@ class JobStatusResponse(BaseModel):
     pending: int
     created_at: str
     updated_at: str
+    progress_message: Optional[str] = None
+    last_error: Optional[str] = None
+    error_samples: List[str] = Field(default_factory=list)
+    progress_pct: float = 0.0
 
 
 class JobResultItem(BaseModel):

@@ -113,11 +113,15 @@
     }
 
     /** Populate the job banner fields */
-    function updateBanner($panel, jobId, state, countdown) {
+    function updateBanner($panel, jobId, state, countdown, meta) {
         var $banner = $panel.find(".job-banner");
+        meta = meta || {};
         if (jobId)    $banner.find(".job-id").text(jobId);
         if (state)    $banner.find(".job-state").attr("class", "job-state " + state).text(state);
         if (countdown !== undefined) $banner.find(".poll-countdown").text(countdown);
+        if (meta.progress) $banner.find(".job-progress").text(meta.progress);
+        if (meta.message !== undefined) $banner.find(".job-message").text(meta.message || "");
+        if (meta.error !== undefined) $banner.find(".job-error").text(meta.error || "");
     }
 
     /** Hide the banner and show the final JSON */
@@ -165,9 +169,13 @@
             })
             .done(function (data) {
                 var state = (data.status || "unknown").toLowerCase();
-                updateBanner($panel, null, state, "");
+                updateBanner($panel, null, state, "", {
+                    progress: (data.completed || 0) + "/" + (data.total || 0) + " complete",
+                    message: data.progress_message || "",
+                    error: data.last_error ? "Latest error: " + data.last_error : ""
+                });
 
-                if (state === "completed" || state === "failed") {
+                if (state === "completed" || state === "partial" || state === "failed") {
                     fetchResults($panel, jobId);
                 } else {
                     remaining = POLL_INTERVAL;
@@ -181,7 +189,11 @@
             });
         }
 
-        updateBanner($panel, jobId, "pending", "next check in " + remaining + "s");
+        updateBanner($panel, jobId, "pending", "next check in " + remaining + "s", {
+            progress: "0 items processed",
+            message: "queued",
+            error: ""
+        });
         timerId = setInterval(tick, 1000);
     }
 

@@ -6,10 +6,22 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 STATIC="$ROOT/src/project_argus/static"
 VENDOR="$STATIC/vendor"
+UV_BIN="${UV_BIN:-}"
+
+if [ -z "$UV_BIN" ]; then
+  if command -v uv >/dev/null 2>&1; then
+    UV_BIN="$(command -v uv)"
+  elif [ -x /root/.local/bin/uv ]; then
+    UV_BIN=/root/.local/bin/uv
+  else
+    echo "uv is required but was not found in PATH" >&2
+    exit 1
+  fi
+fi
 
 echo "==> Installing Python dependencies..."
 cd "$ROOT"
-uv sync
+"$UV_BIN" sync
 
 echo "==> Installing npm dependencies..."
 cd "$ROOT"

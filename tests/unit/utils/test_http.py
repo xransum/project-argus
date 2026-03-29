@@ -1,7 +1,6 @@
 """Unit tests for utils/http.py — client-side redirect extraction utilities."""
 
 from bs4 import BeautifulSoup
-
 from project_argus.utils.http import (
     DEFAULT_REQUEST_HEADERS,
     DEFAULT_USER_AGENT,

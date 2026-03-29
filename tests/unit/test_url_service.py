@@ -3,7 +3,6 @@
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-
 from project_argus.services.url_service import MAX_REDIRECTS, URLService
 
 # ---------------------------------------------------------------------------
