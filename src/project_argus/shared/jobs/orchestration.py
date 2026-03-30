@@ -97,6 +97,7 @@ async def execute_job(
     family: str, operation: str, job_id: str, inputs: list[str]
 ) -> dict[str, Any]:
     handler = get_handler(family, operation)
+    settings = get_settings()
     update_job_progress(
         job_id,
         status="running",
@@ -106,25 +107,49 @@ async def execute_job(
         progress_message=f"starting {family}/{operation}",
     )
 
-    items: list[dict[str, Any]] = []
+    items: list[dict[str, Any] | None] = [None] * len(inputs)
     completed = 0
     failed = 0
     error_samples: list[str] = []
 
-    for index, item in enumerate(inputs, start=1):
+    async def process_one(index: int, item: str) -> tuple[int, dict[str, Any], str | None]:
         try:
             result = await handler(item)
-            items.append({"input": item, "status": "completed", "result": result, "error": None})
-            completed += 1
-            last_error = None
+            return (
+                index,
+                {"input": item, "status": "completed", "result": result, "error": None},
+                None,
+            )
         except Exception as exc:
             error_text = str(exc)
-            items.append({"input": item, "status": "failed", "result": None, "error": error_text})
+            return (
+                index,
+                {"input": item, "status": "failed", "result": None, "error": error_text},
+                error_text,
+            )
+
+    batch_size = max(1, settings.worker_concurrency)
+    processed = 0
+
+    for start in range(0, len(inputs), batch_size):
+        batch = inputs[start : start + batch_size]
+        results = await asyncio.gather(
+            *(process_one(start + offset, item) for offset, item in enumerate(batch))
+        )
+
+        last_error = None
+        for result_index, payload, error_text in results:
+            items[result_index] = payload
+            if error_text is None:
+                completed += 1
+                continue
+
             failed += 1
             last_error = error_text
             if error_text not in error_samples:
                 error_samples.append(error_text)
 
+        processed += len(results)
         pending = len(inputs) - completed - failed
         update_job_progress(
             job_id,
@@ -132,7 +157,7 @@ async def execute_job(
             completed=completed,
             failed=failed,
             pending=pending,
-            progress_message=f"processed {index} of {len(inputs)} items",
+            progress_message=f"processed {processed} of {len(inputs)} items",
             last_error=last_error,
             error_samples=error_samples,
         )
@@ -147,7 +172,7 @@ async def execute_job(
         total=len(inputs),
         completed=completed,
         failed=failed,
-        items=items,
+        items=cast(list[dict[str, Any]], items),
     )
     result_key = write_job_results(payload)
     update_job_progress(

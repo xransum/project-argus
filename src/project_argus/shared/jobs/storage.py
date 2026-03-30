@@ -75,6 +75,23 @@ def update_job_progress(
     if current is None:
         raise KeyError(f"Job {job_id!r} not found")
 
+    current_processed = current.completed + current.failed
+    requested_processed = completed + failed
+    if requested_processed < current_processed:
+        return
+
+    if current.result_key and result_key is None and status == "running":
+        return
+
+    if requested_processed == current_processed:
+        completed = max(completed, current.completed)
+        failed = max(failed, current.failed)
+        pending = min(pending, current.pending)
+        if current.result_key and result_key is None:
+            result_key = current.result_key
+        if current.status in {"completed", "partial", "failed"} and status == "running":
+            status = current.status
+
     samples = list(error_samples or current.error_samples)[:5]
     updated = current.model_copy(
         update={

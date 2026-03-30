@@ -13,7 +13,7 @@ services:
       DEBUG: 1
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:z
-      - ./.localstack:/var/lib/localstack:Z
+      - localstack_state:/var/lib/localstack
 
   web:
     build:
@@ -38,15 +38,12 @@ services:
       ARGUS_DOMAIN_QUEUE_URL: http://localstack:4566/000000000000/project-argus-domain-queue
       ARGUS_IP_QUEUE_URL: http://localstack:4566/000000000000/project-argus-ip-queue
       ARGUS_PROXY_QUEUE_URL: http://localstack:4566/000000000000/project-argus-proxy-queue
-    volumes:
-      - ../../src:/app/src:Z
-      - ../../scripts:/app/scripts:Z
-      - ../../package.json:/app/package.json:Z
-      - ../../pyproject.toml:/app/pyproject.toml:Z
-      - ../../uv.lock:/app/uv.lock:Z
     command:
       - /bin/bash
       - -lc
       - if [ ! -d src/project_argus/static/vendor ]; then bash scripts/build.sh; fi && /root/.local/bin/uv run uvicorn project_argus.main:app --host 0.0.0.0 --port 8000
     depends_on:
       - localstack
+
+volumes:
+  localstack_state:

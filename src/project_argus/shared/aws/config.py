@@ -23,6 +23,7 @@ class AwsSettings:
     domain_queue_url: str = os.getenv("ARGUS_DOMAIN_QUEUE_URL", "")
     ip_queue_url: str = os.getenv("ARGUS_IP_QUEUE_URL", "")
     proxy_queue_url: str = os.getenv("ARGUS_PROXY_QUEUE_URL", "")
+    worker_concurrency: int = int(os.getenv("ARGUS_WORKER_CONCURRENCY", "10"))
 
 
 def get_settings() -> AwsSettings:

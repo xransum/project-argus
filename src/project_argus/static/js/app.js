@@ -145,6 +145,28 @@
 
     var POLL_INTERVAL = 1; // seconds
 
+    function formatProgress(data) {
+        var completed = data.completed || 0;
+        var failed = data.failed || 0;
+        var total = data.total || 0;
+        var processed = completed + failed;
+
+        if (typeof data.progress_pct === "number") {
+            return data.progress_pct + "% (" + processed + "/" + total + " processed)";
+        }
+
+        return processed + "/" + total + " processed";
+    }
+
+    function formatErrorSummary(data) {
+        var samples = Array.isArray(data.error_samples) ? data.error_samples.filter(Boolean) : [];
+        if (samples.length > 0) {
+            return "Recent errors: " + samples.join(" | ");
+        }
+
+        return data.last_error ? "Latest error: " + data.last_error : "";
+    }
+
     function startAutoPoll($panel, jobId) {
         var remaining = POLL_INTERVAL;
         var timerId;
@@ -170,9 +192,9 @@
             .done(function (data) {
                 var state = (data.status || "unknown").toLowerCase();
                 updateBanner($panel, null, state, "", {
-                    progress: (data.completed || 0) + "/" + (data.total || 0) + " complete",
+                    progress: formatProgress(data),
                     message: data.progress_message || "",
-                    error: data.last_error ? "Latest error: " + data.last_error : ""
+                    error: formatErrorSummary(data)
                 });
 
                 if (state === "completed" || state === "partial" || state === "failed") {

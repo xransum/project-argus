@@ -1,5 +1,6 @@
 """Unit tests for URLService.check_status redirect handling and get_headers."""
 
+import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -291,6 +292,26 @@ class TestCheckStatusNetworkError:
         # The first hop (301) should still be in the chain
         assert len(result.redirect_chain) == 1
         assert result.redirect_chain[0].status_code == 301
+
+    async def test_probe_ceiling_timeout(self):
+        async def stall(*args, **kwargs):
+            await asyncio.sleep(0.05)
+            raise AssertionError("should be cancelled by wait_for first")
+
+        mock_client = AsyncMock()
+        mock_client.get = AsyncMock(side_effect=stall)
+        cm = MagicMock()
+        cm.__aenter__ = AsyncMock(return_value=mock_client)
+        cm.__aexit__ = AsyncMock(return_value=False)
+
+        with patch("project_argus.services.url_service.URL_PROBE_CEILING", 0.01), patch(
+            "project_argus.services.url_service.httpx.AsyncClient", return_value=cm
+        ):
+            result = await URLService().check_status("https://example.com")
+
+        assert result.status_code == 0
+        assert result.is_reachable is False
+        assert "timed out" in (result.error or "").lower()
 
 
 @pytest.mark.asyncio

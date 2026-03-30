@@ -9,7 +9,10 @@ PACKAGE_DIR="$BUILD_DIR/package"
 ZIP_PATH="$BUILD_DIR/project-argus-lambda.zip"
 PIP_TARGET_DIR="$BUILD_DIR/python"
 LAMBDA_BUILD_IMAGE="${LAMBDA_BUILD_IMAGE:-public.ecr.aws/lambda/python:3.11}"
-CONTAINER_PIP_TARGET_DIR="/workspace/.build/lambdas/python"
+VOLUME_NAME="project_argus_lambda_build"
+CONTAINER_PIP_TARGET_DIR="/opt/python"
+HOST_UID="$(id -u)"
+HOST_GID="$(id -g)"
 
 rm -rf "$BUILD_DIR"
 mkdir -p "$BUILD_DIR"
@@ -31,15 +34,24 @@ if ! command -v docker >/dev/null 2>&1; then
   exit 1
 fi
 
+docker volume rm -f "$VOLUME_NAME" >/dev/null 2>&1 || true
 docker run --rm \
   --platform linux/amd64 \
   --entrypoint /bin/sh \
-  -v "$ROOT:/workspace:Z" \
-  -w /workspace \
+  -v "$VOLUME_NAME":"$CONTAINER_PIP_TARGET_DIR" \
   "$LAMBDA_BUILD_IMAGE" \
   -lc "python -m pip install --upgrade pip >/dev/null && python -m pip install --target '$CONTAINER_PIP_TARGET_DIR' --upgrade boto3 'httpx[socks]' python-whois dnspython cryptography pydantic idna beautifulsoup4 lxml >/dev/null"
 
+docker run --rm \
+  --user "$HOST_UID:$HOST_GID" \
+  -v "$VOLUME_NAME":"$CONTAINER_PIP_TARGET_DIR":ro \
+  -v "$ROOT:/workspace:Z" \
+  --entrypoint /bin/sh \
+  "$LAMBDA_BUILD_IMAGE" \
+  -lc "cp -R '$CONTAINER_PIP_TARGET_DIR'/. /workspace/.build/lambdas/python/"
+
 cp -R "$PIP_TARGET_DIR"/. "$PACKAGE_DIR/"
+docker volume rm -f "$VOLUME_NAME" >/dev/null 2>&1 || true
 
 PACKAGE_DIR="$PACKAGE_DIR" ZIP_PATH="$ZIP_PATH" python3 - <<'PY'
 from pathlib import Path

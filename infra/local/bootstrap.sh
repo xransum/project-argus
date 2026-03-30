@@ -62,13 +62,14 @@ aws_local s3api create-bucket --bucket project-argus-results >/dev/null 2>&1 || 
 create_queue_pair() {
   local queue_name="$1"
   local dlq_name="$2"
+  local visibility_timeout="${3:-300}"
 
   local dlq_url
   dlq_url="$(aws_local sqs create-queue --queue-name "$dlq_name" --query QueueUrl --output text)"
   local dlq_arn
   dlq_arn="$(aws_local sqs get-queue-attributes --queue-url "$dlq_url" --attribute-names QueueArn --query 'Attributes.QueueArn' --output text)"
   local attributes
-  attributes="$(printf '{"RedrivePolicy":"{\\"deadLetterTargetArn\\":\\"%s\\",\\"maxReceiveCount\\":\\"3\\"}"}' "$dlq_arn")"
+  attributes="$(printf '{"RedrivePolicy":"{\\"deadLetterTargetArn\\":\\"%s\\",\\"maxReceiveCount\\":\\"3\\"}","VisibilityTimeout":"%s"}' "$dlq_arn" "$visibility_timeout")"
   aws_local sqs create-queue --queue-name "$queue_name" --attributes "$attributes" >/dev/null
 }
 
