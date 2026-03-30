@@ -338,6 +338,7 @@ This script will:
 - enable DynamoDB TTL on `expires_at`
 - create S3 bucket `project-argus-results`
 - create SQS queues and DLQs for `http`, `domain`, `ip`, and `proxy`
+- apply a 5 minute SQS visibility timeout so slower jobs do not get retried too early
 - build a Lambda-compatible zip in `.build/lambdas/`
 - deploy all Lambda functions into LocalStack
 - wire SQS event source mappings to family executors
@@ -428,6 +429,11 @@ Note:
 - that is normal when LocalStack is cold-starting Lambda runtime containers
 - poll again after a few seconds
 
+The frontend status banner also shows:
+
+- `progress_pct` from the jobs API
+- recent `error_samples` when the executor reports them
+
 ## Logs And Debugging
 
 Show service status:
@@ -473,16 +479,31 @@ docker compose -f infra/local/docker-compose.yml exec -T localstack \
 
 ## Rebuild And Reset
 
+Rebuild the full local stack after code or Docker changes:
+
+```bash
+docker compose -f infra/local/docker-compose.yml down
+docker compose -f infra/local/docker-compose.yml up --build -d
+bash infra/local/bootstrap.sh
+```
+
+Redeploy Lambdas and local AWS resources after Python or Lambda code changes:
+
+```bash
+bash infra/local/bootstrap.sh
+```
+
+If `.build/lambdas/` contains old root-owned artifacts from previous Docker runs,
+repair ownership before bootstrapping:
+
+```bash
+sudo chown -R "$USER":"$USER" .build/lambdas
+```
+
 Rebuild just the web container:
 
 ```bash
 docker compose -f infra/local/docker-compose.yml up --build -d web
-```
-
-Redeploy Lambdas and local AWS resources:
-
-```bash
-bash infra/local/bootstrap.sh
 ```
 
 Stop services:
@@ -516,9 +537,21 @@ uv run pytest tests/integration/test_main.py tests/integration/test_routes.py te
 
 ## Known Behavior
 
-- `http/status` can complete with SSL verification errors for some outbound HTTPS checks in the Lambda runtime
-- that does not break the queue/job/result pipeline
-- if needed, CA trust handling inside Lambda packaging is the next improvement
+- `http/status` and `http/headers` ignore TLS certificate verification on purpose
+- those URL probes also apply a hard 10 second per-URL timeout ceiling
+- worker execution is concurrent and preserves input order in the final results
+- if a job is retried, stale progress writes should no longer move the UI backward
+
+## Tuning
+
+You can tune executor concurrency with:
+
+```bash
+ARGUS_WORKER_CONCURRENCY=10
+```
+
+This controls the per-job batch size used by the Lambda executors while keeping
+final result order aligned with the original input order.
 
 ## Running In A VM
 

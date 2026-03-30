@@ -5,7 +5,6 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 import pytest
-
 from project_argus.shared.jobs.orchestration import execute_job
 
 
